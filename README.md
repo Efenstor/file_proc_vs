@@ -23,7 +23,7 @@ A script for converting separate frames from image files back to video file, als
 
 **gmic_proc.sh**
 
-A script for multi-threaded (actually multi-process) processing of video using [G'MIC](https://gmic.eu). It's a bit simplistic, so the options are set by editing vars inside the script.
+A script for multi-threaded (actually multi-process) processing of video using [G'MIC](https://gmic.eu). It's a bit simplistic, so the options are set by editing vars inside the script. It extracts video frames into frame files, then processes and encodes them back into video, so in its current form it's a bit redundant considering the existence of the *video_to_frames.sh* and *frames_to_video.sh* scripts.
 
 **progress.sh**
 
