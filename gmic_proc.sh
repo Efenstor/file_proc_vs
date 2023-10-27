@@ -10,6 +10,12 @@ in_dir="gmic_input_frames"
 out_dir="gmic_output_frames"
 gmic=gmic
 
+# ctrlc
+ctrlc() {
+  echo "Abort"
+  abort=true
+}
+
 # Help
 if [ $# -lt 2 ]; then
   echo "Usage: gmic_proc.sh <input_video_file> <output_video_file>"
@@ -51,10 +57,12 @@ fi
 
 # Main multi-threaded processing
 echo "Processing..."
+trap "ctrlc" INT
 files=$(find "$in_dir" -maxdepth 1 -type f -iname "*.png" | sort -n -f)
 while [ -n "$files" ]; do
   # Get free thread count
-  thr_working=$(pgrep -x gmic | wc -l)
+  thr_working=$(pgrep -x $gmic | wc -l)
+  if [ $abort ] && [ ! $thr_working ]; then break; fi
   thr_free=$(expr $threads - $thr_working)
   # Run new threads
   while [ $thr_free -gt 0 ] && [ -n "$files" ]; do
@@ -72,9 +80,11 @@ while [ -n "$files" ]; do
     thr_free=$(expr $thr_free - 1)
     files=$(echo "$files" | tail -n +2)
   done
+  if [ $abort ]; then break; fi
 done
+trap - INT
 # Wait for all threads to finish
-while pgrep -x gmic > /dev/null; do true; done
+while pgrep -x $gmic > /dev/null; do true; done
 
 # Encode
 echo "Encoding frames to video..."
