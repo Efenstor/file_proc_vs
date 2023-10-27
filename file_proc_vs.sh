@@ -62,7 +62,7 @@ shift $((OPTIND - 1))
 if [ $# -lt 3 ]; then
   printf "
 ${YELLOW}Convert a file using VapourSynth
-${GREEN}(copyleft) Efenstor 2015-2023${NC}\n
+${GREEN}(copyleft) Efenstor${NC}\n
 Usage: file_proc_vs [options] <src_file> <dst_dir> <proc.py> [start_time]
 Options:
   -e dst_ext  the destination file extension, e.g. mp4, mkv, etc.

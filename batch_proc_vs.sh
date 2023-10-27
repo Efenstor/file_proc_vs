@@ -45,7 +45,7 @@ shift $((OPTIND - 1))
 if [ $# -lt 4 ]; then
   printf "
 ${YELLOW}Batch convert files using VapourSynth
-${GREEN}(copyleft) Efenstor 2015-2020${NC}\n
+${GREEN}(copyleft) Efenstor${NC}\n
 Usage: batch_proc_vs [options] <src_dir> <src_ext> <dst_dir> <proc.py>
 Parameters:
   src_dir  source directory containing files to process and encode
