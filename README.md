@@ -20,3 +20,5 @@ A sample script (used for restoration of some VHS-quality DVD).
 - VapourSynth R60 or later
 - ffmpeg (for encoding/audio extraction)
 - mpv (for preview)
+- (optional) many different plugins for functions.py
+
