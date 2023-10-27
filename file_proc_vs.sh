@@ -1,6 +1,6 @@
 #!/bin/sh
 # (copyleft) Efenstor 2015-2023
-# Revision 2023-09-02
+# Revision 2023-10-27
 
 # Examples:
 # ffmpeg_options_v="-c:v libx264 -crf 16 -preset fast -tune film"
@@ -15,7 +15,7 @@ ffmpeg_options_v="-c:v libx264 -crf 16"
 ffmpeg_options_a="-c:a copy"
 dst_ext_default="mkv"
 threads=16
-#vspath=/usr/local/lib/python3.11/site-packages
+vspath=/usr/local/lib/python3.11/site-packages
 
 # Internal defines
 export file_proc_vs_exit=
@@ -60,7 +60,8 @@ shift $((OPTIND - 1))
 
 # Show help
 if [ $# -lt 3 ]; then
-  printf "\n${YELLOW}Convert a file using VapourSynth
+  printf "
+${YELLOW}Convert a file using VapourSynth
 ${GREEN}(copyleft) Efenstor 2015-2023${NC}\n
 Usage: file_proc_vs [options] <src_file> <dst_dir> <proc.py> [start_time]
 Options:
@@ -70,6 +71,7 @@ Options:
   -d ms       audio delay in milliseconds
   -l          get audio delay from source file (-d delay will be added to it)
   -a num      audio track to use
+Parameters:
   src_file    source file to process and encode or preview
   dst_dir     directory where the output file is to be placed, if it does not
               exist it will be created
@@ -77,8 +79,8 @@ Options:
   start_time  start time in seconds
 
 ${CYAN}Note: dst_dir must be specified even if you're just previewing the output,
-      because it's the directory where audio is pre-extracted and used with.\n${NC}
-"
+      because it's the directory where audio is pre-extracted and used with.${NC}
+\n"
   exit
 fi
 

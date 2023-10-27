@@ -7,6 +7,10 @@ A Linux shell script (should be Bourne-shell-compatible) for processing video wi
 
 If the script fails with something like *"Permission denied ... Failed to recognize file format"*, uncomment and edit the *vspath* variable at the beginning of the script to point to the location of *vapoursynth.so*.
 
+**batch_proc_vs.sh**
+
+A script for batch processing of many files. Executes *file_proc_vs.sh* for each file in a specified dir.
+
 **functions.py**
 
 A set of useful processing functions.
