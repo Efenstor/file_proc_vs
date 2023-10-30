@@ -104,7 +104,7 @@ def addblur(clip, amount, blksize):
 	overlap = int(blksize/2)
 
 	sup = core.mv.Super(clip, pel=2)
-    
+
 	mvbw1 = core.mv.Analyse(sup, isb=True, delta=1, overlap=overlap,
 			blksize=blksize)
 	mvfw1 = core.mv.Analyse(sup, isb=False, delta=1, overlap=overlap,
@@ -140,18 +140,18 @@ def srmdsharpen(clip, amount=.25, noise_level=3, range=1):
 #--------------------
 # NeuralUpscale
 # method: 0 = SRMD
-#         1 = waifu
-#         2 = RealSR
+#		 1 = waifu
+#		 2 = RealSR
 # models for waifu:
-#    0 = upconv_7_anime_style_art_rgb
-#    1 = upconv_7_photo
-#    2 = cunet (For 2D artwork. Slow, but better quality.)
+#	0 = upconv_7_anime_style_art_rgb
+#	1 = upconv_7_photo
+#	2 = cunet (For 2D artwork. Slow, but better quality.)
 # models for RealSR:
-#    0 = models-DF2K
-#    1 = models-DF2K_JPEG
+#	0 = models-DF2K
+#	1 = models-DF2K_JPEG
 # noise:
-#    SRMD = -1..10
-#    waifu = -1..3
+#	SRMD = -1..10
+#	waifu = -1..3
 #--------------------
 
 def neuralupscale(clip, method=0, model=1, noise=-1):
@@ -195,7 +195,7 @@ def fixfieldjitter(clip, blksize=4, overlap=2, thsad=300, tff=True,
 	woven = core.std.DoubleWeave(clip, tff=tff)
 	woven = core.resize.Bilinear(woven, width=woven.width, height=woven.height/2)
 	woven = core.std.SelectEvery(woven, 2, 0)
-	
+
 	# Deinterlace
 	if deinterlace==True:
 		clip = core.znedi3.nnedi3(woven, field=0)
@@ -376,7 +376,7 @@ def antialias(clip, ml, quant):
 #------------
 # Deblock
 #------------
-def deblock(clip, blksize=8, qp=8.0, mode=2, ml=16.0):
+def deblock(clip, blksize=8, qp=8.0, ml=16.0):
 
 	overlap = int(blksize/2)
 
@@ -450,9 +450,11 @@ def unsharpmask(clip, strength=1, radius=1, passes=2, planes=[0]):
 #--------
 # DeHalo
 #--------
+# Requirements: TBilateral, AddGrain
+
 def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=25,
-		softness=8, sdev=2, idev=6, planes=[0], show_mask=False,
-		show_hl=False, show_filtered=False):
+		softness=8, sdev=2, idev=6, planes=[0], grain_l=0, grain_c=0,
+		show_mask=False, show_hl=False, show_filtered=False):
 
 	# detect edges
 	mask = core.std.Sobel(clip, planes)
@@ -490,6 +492,12 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=25,
 				idev=idev, planes=[0])
 	else:
 		filtered = core.std.BlankClip(clip, color=[255, 0, 0])
+
+	# add grain
+	if grain_l>0 or grain_c>0:
+		filtered = core.grain.Add(filtered, var=grain_l, uvar=grain_c)
+
+	# merge
 	clip = core.std.MaskedMerge(clip, filtered, mask)
 
 	return clip
@@ -520,6 +528,51 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 	edges = denoise(clip, blksizeX, blksizeY, overlap, edges_thsad,
 			edges_thsadc)
 	clip = core.std.MaskedMerge(normal, edges, mask)
+
+	return clip
+
+#------------
+# LumaChroma
+# chroma = -127..127
+# U = yellow(-127)..purple(127)
+# V = green(-127)..red(127)
+#------------
+def lumachroma(clip, black=0, white=255, gamma=1.0, chroma=0, gammaU=1.0,
+		gammaV=1.0, shiftU=0, shiftV=0):
+
+	chroma = 127+chroma
+
+	# Luma
+	clip = core.std.Levels(clip, min_in=black, max_in=white, min_out=0,
+		max_out=255, gamma=gamma, planes=0)
+
+	# Shift
+	if shiftU<0:
+		minU = 0
+		maxU = 255+shiftU
+	else:
+		minU = shiftU
+		maxU = 255
+	if shiftV<0:
+		minV = 0
+		maxV = 255+shiftV
+	else:
+		minV = shiftV
+		maxV = 255
+
+	# Chroma U
+	if chroma>127:
+		base = chroma-128
+		clip = core.std.Levels(clip, min_in=base, max_in=255-base,
+			min_out=minU, max_out=maxU, gamma=gammaU, planes=1)
+		clip = core.std.Levels(clip, min_in=base, max_in=255-base,
+			min_out=minV, max_out=maxV, gamma=gammaV, planes=2)
+	else:
+		base = 127-chroma
+		clip = core.std.Levels(clip, min_in=0, max_in=255,
+			min_out=minU+base, max_out=maxU-base, gamma=gammaU, planes=1)
+		clip = core.std.Levels(clip, min_in=0, max_in=255,
+			min_out=minV+base, max_out=maxV-base, gamma=gammaV, planes=2)
 
 	return clip
 
