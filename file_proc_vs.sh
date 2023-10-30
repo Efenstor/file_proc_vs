@@ -139,7 +139,7 @@ fi
 echo "Detecting the start frame for the given start time"
 start_frame=$(ffmpeg -hide_banner -i "$src_file" \
   -t $video_start_time -codec:v yuv4 -codec:a copy -f null /dev/null 2>&1 | \
-  sed -n "s/.*frame= *\([[:digit:]]*\).*/\1/p")
+  sed -n "s/.*frame= *\([[:digit:]]*\).*/\1/p" | tail -n 1)
 echo "Start time: $video_start_time sec"
 echo "Start frame: $start_frame"
 echo
@@ -153,13 +153,13 @@ if [ ! $mpv ]; then
   # Encode
   echo "Encoding..."
   if [ ! $no_audio ]; then
-    env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" -y "$script" \
-      -p -r $threads -s $start_frame - | ffmpeg -i pipe: \
+    env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
+      -c y4m "$script" -p -r $threads -s $start_frame - | ffmpeg -i pipe: \
       -ss $audio_start_time -i "$audio" -map 0:v:0 -map 1:a:0 \
       $ffmpeg_options_v $ffmpeg_options_a "$dst"
   else
-    env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" -y "$script" \
-      -p -r $threads -s $start_frame - | ffmpeg -i pipe: \
+    env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
+      -c y4m "$script" -p -r $threads -s $start_frame - | ffmpeg -i pipe: \
       $ffmpeg_options_v -c:a none "$dst"
   fi
   # Cancelled
@@ -173,13 +173,14 @@ else
   echo "Preview..."
   if [ ! $no_audio ]; then
     # With audio
-    env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" -y "$script" \
-      -p -r $threads -s $start_frame - | mpv --audio-file="$audio" \
-      --audio-delay=-$audio_start_time --fs -
+    env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
+      -c y4m "$script" -p -r $threads -s $start_frame - | \
+      mpv --audio-file="$audio" --audio-delay=-$audio_start_time --fs -
   else
     # Without audio
-    env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" -y "$script" \
-      -p -r $threads -s $start_frame - | mpv --fs -
+    env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
+      -c y4m "$script" -p -r $threads -s $start_frame - | \
+      mpv --fs -
   fi
   # Cancelled
   if [ $? -ne 0 ]; then export file_proc_vs_exit=1; exit 1; fi
