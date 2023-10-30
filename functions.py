@@ -8,6 +8,8 @@ import functools
 #-------------
 # TVRange
 #-------------
+# Requirements: none
+
 def tvrange(clip):
 
 	clip = core.std.Levels(clip, min_in=0, max_in=255, min_out=16, max_out=235,
@@ -20,6 +22,8 @@ def tvrange(clip):
 #-------------
 # FullRange
 #-------------
+# Requirements: none
+
 def fullrange(clip):
 
 	clip = core.std.Levels(clip, min_in=16, max_in=235, min_out=0, max_out=255,
@@ -32,6 +36,8 @@ def fullrange(clip):
 #------
 # IVTC
 #------
+# Requirements: vivtc
+
 def ivtc(clip):
 
 	clip = core.vivtc.VFM(clip=clip, order=1, mode=0, micmatch=0)
@@ -43,6 +49,8 @@ def ivtc(clip):
 #---------
 # Denoise
 #---------
+# Requirements: MVTools or MVTools-Float
+
 def denoise(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=200, thsadc=400):
 
 	overlapX = int(blksizeX/overlap)
@@ -76,6 +84,8 @@ def denoise(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=200, thsadc=400):
 #------------
 # FlowFPS
 #------------
+# Requirements: MVTools or MVTools-Float
+
 def flowfps(clip, num, den, blksize, keepfps):
 
 	src_fpsnum = clip.fps_num
@@ -99,6 +109,8 @@ def flowfps(clip, num, den, blksize, keepfps):
 #---------
 # AddBlur
 #---------
+# Requirements: MVTools or MVTools-Float
+
 def addblur(clip, amount, blksize):
 
 	overlap = int(blksize/2)
@@ -116,6 +128,8 @@ def addblur(clip, amount, blksize):
 #-------------
 # SRMDSharpen
 #-------------
+# Requirements: SRMD
+
 def srmdsharpen(clip, amount=.25, noise_level=3, range=1):
 
 	# Convert format to RGBS and downscale
@@ -153,6 +167,7 @@ def srmdsharpen(clip, amount=.25, noise_level=3, range=1):
 #	SRMD = -1..10
 #	waifu = -1..3
 #--------------------
+# Requirements: SRMD, Waifu2x NCNN Vulkan, RealSR
 
 def neuralupscale(clip, method=0, model=1, noise=-1):
 
@@ -172,6 +187,8 @@ def neuralupscale(clip, method=0, model=1, noise=-1):
 #-----------------
 # FixFieldJitter
 #-----------------
+# Requirements: znedi3, MVTools or MVTools-Float
+
 def fixfieldjitter(clip, blksize=4, overlap=2, thsad=300, tff=True,
 		deinterlace=False):
 
@@ -208,6 +225,8 @@ def fixfieldjitter(clip, blksize=4, overlap=2, thsad=300, tff=True,
 #----------------
 # RestoreDetails
 #----------------
+# Requirements: MVTools or MVTools-Float
+
 def restoredetails(clip, blksize=8, thsad=200):
 
 	# Upscale
@@ -267,6 +286,8 @@ def restoredetails(clip, blksize=8, thsad=200):
 #----------
 # Slowdown
 #----------
+# Requirements: none
+
 def slowdown(clip, transition):
 
 	src_fpsnum = clip.fps_num
@@ -289,6 +310,8 @@ def slowdown(clip, transition):
 #----------
 # SpeedUp
 #----------
+# Requirements: none
+
 def speedup(clip, transition):
 
 	src_fpsnum = clip.fps_num
@@ -310,6 +333,8 @@ def speedup(clip, transition):
 #--------
 # Strobe
 #--------
+# Requirements: none
+
 def strobe(clip, transition):
 
 	src_fpsnum = clip.fps_num
@@ -327,6 +352,8 @@ def strobe(clip, transition):
 #-----------
 # FrameBlur
 #-----------
+# Requirements: none
+
 def frameblur(clip, transition):
 
 	frameA = clip
@@ -339,6 +366,8 @@ def frameblur(clip, transition):
 #----------
 # Debarrel
 #----------
+# Requirements: vcmove
+
 def debarrel(clip):
 
 	# Canon HF100 with Raynox x0.3 on with the 37mm-37mm ring
@@ -358,13 +387,20 @@ def debarrel(clip):
 	return clip
 
 
-#------------
-# Anti-alias
-#------------
-def antialias(clip, ml, quant):
+#---------
+# DeCanon
+#---------
+# Removes residual interlacing and block artifacts after IVTC, was made
+# specifically for 24p video produced by the old Canon Vixia camcorders
+
+# Requirements: MVTools or MVTools-Float, Deblock
+
+def decanon(clip, ml=40, quant=40, skip_decomb=False):
 
 	overlap = 2
 
+	if skip_decomb==False:
+	    clip = core.vinverse.Vinverse(clip=clip)
 	sup = core.mv.Super(clip)
 	mvfw = core.mv.Analyse(sup, isb=False, overlap=overlap)
 	mask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=ml, gamma=2.0)
@@ -373,9 +409,11 @@ def antialias(clip, ml, quant):
 
 	return clip
 
-#------------
+#---------
 # Deblock
-#------------
+#---------
+# Requirements: DeblockPP7
+
 def deblock(clip, blksize=8, qp=8.0, ml=16.0):
 
 	overlap = int(blksize/2)
@@ -391,12 +429,11 @@ def deblock(clip, blksize=8, qp=8.0, ml=16.0):
 #--------------
 # Deaberration
 #--------------
-def deaberration(clip):
+# Default values are for Canon HF100 with Raynox x0.3 with the 37mm-37mm ring
 
-	# Canon HF100 with Raynox x0.3 on with the 37mm-37mm ring
-	r_size = 1.002
-	g_size = 1.002
-	b_size = 1.0
+# Requirements: none
+
+def deaberration(clip, r_size=1.002, g_size=1.002, b_size=1.0):
 
 	# Extract planes
 	r = core.std.ShufflePlanes(clips=clip, planes=0, colorfamily=vs.GRAY)
@@ -436,6 +473,8 @@ def deaberration(clip):
 #-------------
 # UnsharpMask
 #-------------
+# Requirements: none
+
 def unsharpmask(clip, strength=1, radius=1, passes=2, planes=[0]):
 
 	blur = core.std.BoxBlur(clip, planes=planes, hradius=radius, vradius=radius,
@@ -494,7 +533,7 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=25,
 		filtered = core.std.BlankClip(clip, color=[255, 0, 0])
 
 	# add grain
-	if grain_l>0 or grain_c>0:
+	if grain_l > 0 or grain_c > 0:
 		filtered = core.grain.Add(filtered, var=grain_l, uvar=grain_c)
 
 	# merge
@@ -506,6 +545,8 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=25,
 #----------
 # Denoise2
 #----------
+# Requirements: MVTools or MVTools-Float
+
 def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 			edges_thsad=1500, edges_thsadc=1500, edges_threshold=63,
 			edges_width=3, edges_softness=3, show_mask=False):
@@ -537,6 +578,8 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 # U = yellow(-127)..purple(127)
 # V = green(-127)..red(127)
 #------------
+# Requirements: none
+
 def lumachroma(clip, black=0, white=255, gamma=1.0, chroma=0, gammaU=1.0,
 		gammaV=1.0, shiftU=0, shiftV=0):
 
