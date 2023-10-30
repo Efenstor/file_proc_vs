@@ -227,10 +227,11 @@ def fixfieldjitter(clip, blksize=4, overlap=2, thsad=300, tff=True,
 #----------------
 # Requirements: MVTools or MVTools-Float
 
-def restoredetails(clip, blksize=8, thsad=200):
+def restoredetails(clip, blksize=8, thsad=200, skip_upscale=False):
 
 	# Upscale
-	clip = core.resize.Spline36(clip=clip, width=int(clip.width*2),
+	if skip_upscale==False:
+		clip = core.resize.Spline36(clip=clip, width=int(clip.width*2),
 			height=int(clip.height*2))
 
 	# Analyze
@@ -575,7 +576,7 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 #------------
 # LumaChroma
 # chroma = -127..127
-# U = yellow(-127)..purple(127)
+# U = yellow(-127)..blue(127)
 # V = green(-127)..red(127)
 #------------
 # Requirements: none
