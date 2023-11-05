@@ -436,6 +436,11 @@ def deblock(clip, blksize=8, qp=8.0, ml=16.0):
 
 def deaberration(clip, r_size=1.002, g_size=1.002, b_size=1.0):
 
+	# Convert to RGB
+	orig_fmt = clip.format
+	if orig_fmt != vs.RGBS:
+		clip = core.resize.Bicubic(clip, format=vs.RGBS, matrix_in_s="709")
+
 	# Extract planes
 	r = core.std.ShufflePlanes(clips=clip, planes=0, colorfamily=vs.GRAY)
 	g = core.std.ShufflePlanes(clips=clip, planes=1, colorfamily=vs.GRAY)
@@ -467,6 +472,10 @@ def deaberration(clip, r_size=1.002, g_size=1.002, b_size=1.0):
 	# Combine planes
 	clip = core.std.ShufflePlanes(clips=[r,g,b], planes=[0,0,0],
 			colorfamily=vs.RGB)
+
+	# Convert back
+	if orig_fmt != vs.RGBS:
+		clip = core.resize.Bicubic(clip, format=orig_fmt, matrix_s="709")
 
 	return clip
 

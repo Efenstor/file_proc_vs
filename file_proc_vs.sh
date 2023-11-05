@@ -11,10 +11,10 @@
 # ffmpeg_options_a="-c:a ogg -q:a 3.0"
 
 # User defines
-ffmpeg_options_v="-c:v libx264 -crf 16"
-ffmpeg_options_a="-c:a copy"
+ffmpeg_options_v="-c:v libx264 -crf 20 -tune film"
+ffmpeg_options_a="-c:a aac -b:a 256k"
 dst_ext_default="mkv"
-threads=16
+threads=4
 vspath=/usr/local/lib/python3.11/site-packages
 
 # Internal defines
