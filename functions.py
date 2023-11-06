@@ -430,11 +430,15 @@ def deblock(clip, blksize=8, qp=8.0, ml=16.0):
 #--------------
 # Deaberration
 #--------------
-# Default values are for Canon HF100 with Raynox x0.3 with the 37mm-37mm ring
+# For Olympus OM-D Mark III (F7.0-9.0) + Olympus M.Zuiko 17mm F1.8 +
+# Raynox x0.66 HD + 46-52mm ring: r_size=1.000, g_size=1.002, b_size=1.004
+
+# For Canon HF100 with Raynox x0.3 with the 37mm-37mm ring:
+# r_size=1.002, g_size=1.002, b_size=1.000
 
 # Requirements: none
 
-def deaberration(clip, r_size=1.002, g_size=1.002, b_size=1.0):
+def deaberration(clip, r_size=1.000, g_size=1.002, b_size=1.004):
 
 	# Convert to RGB
 	orig_fmt = clip.format
