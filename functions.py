@@ -51,12 +51,17 @@ def ivtc(clip):
 #---------
 # Requirements: MVTools or MVTools-Float
 
-def denoise(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=200, thsadc=400):
+def denoise(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=200, thsadc=400,
+		ext_super=None):
 
 	overlapX = int(blksizeX/overlap)
 	overlapY = int(blksizeY/overlap)
 
-	sup = core.mv.Super(clip)
+	if ext_super==None:
+		sup = core.mv.Super(clip)
+	else:
+		sup = ext_super
+
 	mvbw1 = core.mv.Analyse(sup, isb=True, delta=1, overlap=overlapX,
 			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
 	mvfw1 = core.mv.Analyse(sup, isb=False, delta=1, overlap=overlapX,
@@ -69,12 +74,14 @@ def denoise(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=200, thsadc=400):
 			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
 	mvfw3 = core.mv.Analyse(sup, isb=False, delta=3, overlap=overlapX,
 			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+
 	if thsad==0:
 		plane = 3
 	elif thsadc==0:
 		plane = 0
 	else:
 		plane = 4
+
 	clip = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2, mvfw2, mvbw3, mvfw3,
 			thsad=thsad, thsadc=thsadc, plane=plane)
 
@@ -489,10 +496,10 @@ def deaberration(clip, r_size=1.000, g_size=1.002, b_size=1.004):
 #-------------
 # Requirements: none
 
-def unsharpmask(clip, strength=1, radius=1, passes=2, planes=[0]):
+def unsharpmask(clip, strength=1, hradius=1, vradius=1, passes=2, planes=[0]):
 
-	blur = core.std.BoxBlur(clip, planes=planes, hradius=radius, vradius=radius,
-			hpasses=passes, vpasses=passes)
+	blur = core.std.BoxBlur(clip, planes=planes, hradius=hradius,
+		vradius=vradius, hpasses=passes, vpasses=passes)
 	diff = core.std.MakeDiff(clip, blur, planes=planes)
 	sharp = core.std.MergeDiff(clip, diff, planes=planes)
 	clip = core.std.Merge(clip, sharp, strength)
@@ -500,89 +507,199 @@ def unsharpmask(clip, strength=1, radius=1, passes=2, planes=[0]):
 	return clip
 
 
+#---------
+# Sharpen
+#---------
+# strength: 0..1
+# mode: s = square
+#		h = horizontal
+#		v = vertical
+
+# Requirements: none
+
+def sharpen(clip, strength=1, mode="s", planes=[0]):
+
+	sh = core.std.Convolution(clip, matrix=[0, -1, 0, -1, 5, -1, 0, -1, 0], planes=planes)
+	clip = core.std.Merge(clip, sh, strength)
+
+	return clip
+
+
 #--------
 # DeHalo
 #--------
+# You can use show_mask to extract mask, then do some additional processing on
+# the filtered areas, then use ext_mask to reuse it
+
 # Requirements: TBilateral, AddGrain
 
 def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=25,
 		softness=8, sdev=2, idev=6, planes=[0], grain_l=0, grain_c=0,
-		show_mask=False, show_hl=False, show_filtered=False):
+		grain_hcorr=0, grain_vcorr=0, show_mask=False, show_hl=False,
+		show_filtered=False, ext_mask=None):
 
-	# detect edges
-	mask = core.std.Sobel(clip, planes)
-	mask = core.std.Levels(mask, gamma=edge_gamma)
+	if ext_mask==None:
 
-	# produce the halo mask
-	hmask = mask
-	for i in range(0, halo_width):
-		hmask = core.std.Maximum(hmask, planes)
+		# detect edges
+		mask = core.std.Sobel(clip, planes)
+		mask = core.std.Levels(mask, gamma=edge_gamma, planes=planes)
 
-	# subtract the safe areas
-	smask = mask
-	if offset!=0:
-		if offset>0:
-			for i in range(0, offset):
-				smask = core.std.Maximum(smask, planes)
-		else:
-			for i in range(0, -offset):
-				smask = core.std.Minimum(smask, planes)
-	mask = core.std.Expr([hmask, smask], "x y -")
+		# produce the halo mask
+		hmask = mask
+		for i in range(0, halo_width):
+			hmask = core.std.Maximum(hmask, planes=planes)
 
-	# subtract the hightlight areas from the halo areas
-	hlmask = core.std.Binarize(clip, threshold=hl_th, planes=planes)
-	if show_hl==True: return hlmask
-	mask = core.std.Expr([mask, hlmask], "x y -")
+		# subtract the safe areas
+		smask = mask
+		if offset!=0:
+			if offset>0:
+				for i in range(0, offset):
+					smask = core.std.Maximum(smask, planes=planes)
+			else:
+				for i in range(0, -offset):
+					smask = core.std.Minimum(smask, planes=planes)
+		mask = core.std.Expr([hmask, smask], "x y -")
 
-	# soften the mask
-	if softness>0:
-		mask = core.std.BoxBlur(mask, planes, softness, 2, softness, 2)
-	if show_mask==True: return mask
+		# subtract the hightlight areas from the halo areas
+		hlmask = core.std.Binarize(clip, threshold=hl_th, planes=planes)
+		if show_hl==True: return hlmask
+		mask = core.std.Expr([mask, hlmask], "x y -")
+
+		# soften the mask
+		if softness>0:
+			mask = core.std.BoxBlur(mask, planes, softness, 2, softness, 2)
+
+		# show mask
+		if show_mask==True:
+			white = core.std.BlankClip(clip, color=[255,0,0])
+			clip = core.std.MaskedMerge(clip, white, mask, planes=planes)
+			return mask
+
+	else:
+		# use external mask
+		mask = ext_mask
 
 	# filter
 	if show_filtered==False:
 		filtered = core.tbilateral.TBilateral(clip, diameter=7, sdev=sdev,
-				idev=idev, planes=[0])
+				idev=idev, planes=planes)
 	else:
 		filtered = core.std.BlankClip(clip, color=[255, 0, 0])
 
 	# add grain
 	if grain_l > 0 or grain_c > 0:
-		filtered = core.grain.Add(filtered, var=grain_l, uvar=grain_c)
+		filtered = core.grain.Add(filtered, var=grain_l, uvar=grain_c,
+			hcorr=grain_hcorr, vcorr=grain_vcorr)
 
 	# merge
-	clip = core.std.MaskedMerge(clip, filtered, mask)
+	clip = core.std.MaskedMerge(clip, filtered, mask, planes=planes)
 
 	return clip
 
 
 #----------
 # Denoise2
+# mov_ml - vector length: >0
+# mov_method: 0=disabled, 1=TBilateral, 2=BoxBlur, 3=FlowBlur
+# mov_size, mov_sizec - filtering size:
+#   for mov_method=1,2: odd numbers, 3..inf
+#   for mov_method=3: 0..100 (% of vector length), mov_sizec is ignored
+# mov_sdev, mov_sdevc, mov_idev, mov_idevc - thresholds for mov_method=1:
+#   sdev=spatial deviations, the more the stronger
+#   idev=intensity deviations, the more the stronger
 #----------
-# Requirements: MVTools or MVTools-Float
+# Filters out noise using different approaches for static areas, for edges and
+# (optionally) for areas with strong motion. To tweak, first of all play with
+# thsad, thsadc (filtering strength for static areas, luma and chroma),
+# edges_threshold, mov_ml (motion detection threshold), mov_size and mov_sizec
+# (filter size for areas with motion, luma and chroma). show_edgemask and
+# show_movmask may help quite a lot to find the correct values.
+
+# Requirements: MVTools or MVTools-Float, TBilateral
 
 def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 			edges_thsad=1500, edges_thsadc=1500, edges_threshold=63,
-			edges_width=3, edges_softness=3, show_mask=False):
+			edges_width=3, edges_softness=3, edges_showmask=False,
+			mov_method=0, mov_ml=20.0, mov_softness=5, mov_th=100, mov_size=3,
+			mov_sizec=5, mov_sdev=4, mov_sdevc=8, mov_idev=8, mov_idevc=4,
+			mov_amount=0.7, mov_showmask=False):
 
-	mask = core.std.Sobel(clip)
-	mask = core.std.Binarize(mask, threshold=edges_threshold)
-
-	hmask = mask
+	# create edge mask
+	edgemask = core.std.Sobel(clip)
+	edgemask = core.std.Binarize(edgemask, threshold=edges_threshold)
+	hmask = edgemask
 	for i in range(0, edges_width):
 		hmask = core.std.Maximum(hmask)
 	if edges_softness>0:
-		mask = core.std.BoxBlur(hmask, hradius=edges_softness, hpasses=2,
+		edgemask = core.std.BoxBlur(hmask, hradius=edges_softness, hpasses=2,
 				vradius=edges_softness, vpasses=2)
 	else:
-		mask = hmask
+		edgemask = hmask
+	if edges_showmask==True: return edgemask
 
-	if show_mask==True: return mask
+	# create super
+	sup = core.mv.Super(clip)
 
-	normal = denoise(clip, blksizeX, blksizeY, overlap, thsad, thsadc)
-	edges = denoise(clip, blksizeX, blksizeY, overlap, edges_thsad,
-			edges_thsadc)
-	clip = core.std.MaskedMerge(normal, edges, mask)
+	# denoise
+	overlapX = int(blksizeX/overlap)
+	overlapY = int(blksizeY/overlap)
+	if thsad==0: plane = 3
+	elif thsadc==0: plane = 0
+	else: plane = 4
+	mvbw1 = core.mv.Analyse(sup, isb=True, delta=1, overlap=overlapX,
+			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+	mvfw1 = core.mv.Analyse(sup, isb=False, delta=1, overlap=overlapX,
+			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+	mvbw2 = core.mv.Analyse(sup, isb=True, delta=2, overlap=overlapX,
+			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+	mvfw2 = core.mv.Analyse(sup, isb=False, delta=2, overlap=overlapX,
+			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+	mvbw3 = core.mv.Analyse(sup, isb=True, delta=3, overlap=overlapX,
+			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+	mvfw3 = core.mv.Analyse(sup, isb=False, delta=3, overlap=overlapX,
+			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+	normal = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2, mvfw2,
+			mvbw3, mvfw3, thsad=thsad, thsadc=thsadc, plane=plane)
+	edges = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2, mvfw2,
+			mvbw3, mvfw3, thsad=edges_thsad, thsadc=edges_thsadc, plane=plane)
+	clip = core.std.MaskedMerge(normal, edges, edgemask)
+
+	if mov_method>0:
+		# re-analyse the filtered image to avoid false reaction to noise
+		sup = core.mv.Super(clip)
+		mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=overlapX,
+			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+
+		# create motion mask
+		movmask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=mov_ml,
+			gamma=1.0)
+		movmask = core.std.Binarize(movmask, threshold=mov_th)
+		movmask = core.std.BoxBlur(movmask, hradius=mov_softness, hpasses=2,
+				vradius=mov_softness, vpasses=2)
+		if mov_showmask==True: return movmask
+
+		# denoise areas with motion
+		if mov_method==1:
+			# TBilateral
+			mov = core.tbilateral.TBilateral(clip, planes=[0],
+				diameter=mov_size, sdev=mov_sdev, idev=mov_idev)
+			mov = core.tbilateral.TBilateral(mov, planes=[1,2],
+				diameter=mov_sizec, sdev=mov_sdevc, idev=mov_idevc)
+		elif mov_method==2:
+			# BoxBlur
+			radius = int(mov_size/2)
+			radiusc = int(mov_sizec/2)
+			mov = core.std.BoxBlur(clip, planes=[0], hradius=radius,
+				vradius=radius)
+			mov = core.std.BoxBlur(mov, planes=[1,2], hradius=radiusc,
+				vradius=radiusc)
+		else:
+			# FlowBlur
+			mvbw = core.mv.Analyse(sup, isb=True, blksize=mov_blksize)
+			mov = core.mv.FlowBlur(clip, sup, mvbw, mvfw, blur=mov_size)
+
+		movf = core.std.MaskedMerge(clip, mov, movmask)
+		clip = core.std.Merge(clip, movf, mov_amount)
 
 	return clip
 
@@ -630,6 +747,45 @@ def lumachroma(clip, black=0, white=255, gamma=1.0, chroma=0, gammaU=1.0,
 			min_out=minU+base, max_out=maxU-base, gamma=gammaU, planes=1)
 		clip = core.std.Levels(clip, min_in=0, max_in=255,
 			min_out=minV+base, max_out=maxV-base, gamma=gammaV, planes=2)
+
+	return clip
+
+
+#---------
+# DeGhost
+#---------
+# Requirements: LGhost
+
+def deghost(clip, th=70, mode=3, shift=-4, intensity=50, expand=2, softness=2,
+	planes=[0], show_mask=False):
+
+	# detect affected areas
+	mask = core.std.Convolution(clip, matrix=[-1,-2,-1,0,0,0,1,2,1], mode="h", planes=planes)
+
+	# adjust to threshold
+	mask = core.std.Levels(mask, min_in=th, max_in=255, min_out=0, max_out=255,
+		planes=planes)
+
+	# expand
+	for i in range(0, expand):
+		mask = core.std.Maximum(mask, planes=planes,
+			coordinates=[0,0,0,1,1,0,0,0])
+
+	# soften
+	if softness>0:
+		mask = core.std.BoxBlur(mask, planes, softness, 2, 0)
+
+	# show mask
+	if show_mask==True:
+		white = core.std.BlankClip(clip, color=[255,0,0])
+		clip = core.std.MaskedMerge(clip, white, mask, planes=planes)
+		return clip
+
+	# deghost
+	dg = core.lghost.LGhost(clip, mode, shift, intensity, planes=planes)
+
+	# merge
+	clip = core.std.MaskedMerge(clip, dg, mask, planes=planes)
 
 	return clip
 
