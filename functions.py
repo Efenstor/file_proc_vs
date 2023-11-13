@@ -533,10 +533,10 @@ def sharpen(clip, strength=1, mode="s", planes=[0]):
 
 # Requirements: TBilateral, AddGrain
 
-def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=25,
-		softness=8, sdev=2, idev=6, planes=[0], grain_l=0, grain_c=0,
-		grain_hcorr=0, grain_vcorr=0, show_mask=False, show_hl=False,
-		show_filtered=False, ext_mask=None):
+def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=12,
+		softness=8, diameter=5, sdev=2, idev=6, planes=[0], grain_l=0,
+		grain_c=0, grain_hcorr=0, grain_vcorr=0, show_mask=False,
+		show_hl=False, show_filtered=False, ext_mask=None):
 
 	if ext_mask==None:
 
@@ -570,10 +570,7 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=25,
 			mask = core.std.BoxBlur(mask, planes, softness, 2, softness, 2)
 
 		# show mask
-		if show_mask==True:
-			white = core.std.BlankClip(clip, color=[255,0,0])
-			clip = core.std.MaskedMerge(clip, white, mask, planes=planes)
-			return mask
+		if show_mask==True: return mask
 
 	else:
 		# use external mask
@@ -581,8 +578,8 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=25,
 
 	# filter
 	if show_filtered==False:
-		filtered = core.tbilateral.TBilateral(clip, diameter=7, sdev=sdev,
-				idev=idev, planes=planes)
+		filtered = core.tbilateral.TBilateral(clip, diameter=diameter,
+				sdev=sdev, idev=idev, planes=planes)
 	else:
 		filtered = core.std.BlankClip(clip, color=[255, 0, 0])
 
@@ -599,7 +596,12 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=25,
 
 #----------
 # Denoise2
-# mov_ml - vector length: >0
+# overlap is the div factor (e.g. overlap=2 means blksize/2)
+# recalc is the number of recalculations (e.g. for blksize=32 3 means 16,8,4)
+# edges_recalc_proc is the number of processing passes made on edges during
+#   the recalculations, <=recalc; 0 means the edges will be processed after the
+#   last recalc, 1 = after each of the last two recalcs, and so on.
+# mov_ml - vector length for motion estimation: >0
 # mov_method: 0=disabled, 1=TBilateral, 2=BoxBlur, 3=FlowBlur
 # mov_size, mov_sizec - filtering size:
 #   for mov_method=1,2: odd numbers, 3..inf
@@ -617,12 +619,18 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=25,
 
 # Requirements: MVTools or MVTools-Float, TBilateral
 
-def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
-			edges_thsad=1500, edges_thsadc=1500, edges_threshold=63,
-			edges_width=3, edges_softness=3, edges_showmask=False,
-			mov_method=0, mov_ml=20.0, mov_softness=5, mov_th=100, mov_size=3,
-			mov_sizec=5, mov_sdev=4, mov_sdevc=8, mov_idev=8, mov_idevc=4,
-			mov_amount=0.7, mov_showmask=False):
+def denoise2(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
+			thsad=300, thsadc=300, edges_recalc_proc=2, edges_thsad=1500,
+			edges_thsadc=1500, edges_threshold=63, edges_width=3,
+			edges_softness=3, edges_showmask=False, mov_method=1, mov_ml=20.0,
+			mov_softness=5, mov_th=100, mov_size=3, mov_sizec=5, mov_sdev=4,
+			mov_sdevc=8, mov_idev=8, mov_idevc=4, mov_amount=0.7,
+			mov_showmask=False):
+
+	# prepare some vars
+	if thsad==0: plane = 3
+	elif thsadc==0: plane = 0
+	else: plane = 4
 
 	# create edge mask
 	edgemask = core.std.Sobel(clip)
@@ -637,38 +645,73 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 		edgemask = hmask
 	if edges_showmask==True: return edgemask
 
-	# create super
+	# denoise picture
+	bsX = blksizeX
+	bsY = blksizeY
+	olX = int(bsX/overlap)
+	olY = int(bsY/overlap)
 	sup = core.mv.Super(clip)
-
-	# denoise
-	overlapX = int(blksizeX/overlap)
-	overlapY = int(blksizeY/overlap)
-	if thsad==0: plane = 3
-	elif thsadc==0: plane = 0
-	else: plane = 4
-	mvbw1 = core.mv.Analyse(sup, isb=True, delta=1, overlap=overlapX,
-			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
-	mvfw1 = core.mv.Analyse(sup, isb=False, delta=1, overlap=overlapX,
-			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
-	mvbw2 = core.mv.Analyse(sup, isb=True, delta=2, overlap=overlapX,
-			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
-	mvfw2 = core.mv.Analyse(sup, isb=False, delta=2, overlap=overlapX,
-			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
-	mvbw3 = core.mv.Analyse(sup, isb=True, delta=3, overlap=overlapX,
-			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
-	mvfw3 = core.mv.Analyse(sup, isb=False, delta=3, overlap=overlapX,
-			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+	mvbw1 = core.mv.Analyse(sup, isb=True, delta=1, overlap=olX,
+			overlapv=olY, blksize=bsX, blksizev=bsY)
+	mvfw1 = core.mv.Analyse(sup, isb=False, delta=1, overlap=olX,
+			overlapv=olY, blksize=bsX, blksizev=bsY)
+	mvbw2 = core.mv.Analyse(sup, isb=True, delta=2, overlap=olX,
+			overlapv=olY, blksize=bsX, blksizev=bsY)
+	mvfw2 = core.mv.Analyse(sup, isb=False, delta=2, overlap=olX,
+			overlapv=olY, blksize=bsX, blksizev=bsY)
+	mvbw3 = core.mv.Analyse(sup, isb=True, delta=3, overlap=olX,
+			overlapv=olY, blksize=bsX, blksizev=bsY)
+	mvfw3 = core.mv.Analyse(sup, isb=False, delta=3, overlap=olX,
+			overlapv=olY, blksize=bsX, blksizev=bsY)
+	if recalc>0 and edges_recalc_proc>=recalc:
+		# if there will be recalcs and number of edge processing passes is the
+		# same then first process here, starting with the largest block size
+		edges = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2, mvfw2,
+				mvbw3, mvfw3, thsad=edges_thsad, thsadc=edges_thsadc,
+				plane=plane)
+	else: edges = clip
+	for r in range(0, recalc):
+		bsX = bsX>>1
+		if bsX<4: break
+		bsY = bsY>>1
+		if bsY<4: break
+		olX = int(bsX/overlap)
+		olY = int(bsY/overlap)
+		mvbw1 = core.mv.Recalculate(sup, mvbw1, overlap=olX, overlapv=olY,
+				blksize=bsX, blksizev=bsY)
+		mvfw1 = core.mv.Recalculate(sup, mvfw1, overlap=olX, overlapv=olY,
+				blksize=bsX, blksizev=bsY)
+		mvbw2 = core.mv.Recalculate(sup, mvbw2, overlap=olX, overlapv=olY,
+				blksize=bsX, blksizev=bsY)
+		mvfw2 = core.mv.Recalculate(sup, mvfw2, overlap=olX, overlapv=olY,
+				blksize=bsX, blksizev=bsY)
+		mvbw3 = core.mv.Recalculate(sup, mvbw3, overlap=olX, overlapv=olY,
+				blksize=bsX, blksizev=bsY)
+		mvfw3 = core.mv.Recalculate(sup, mvfw3, overlap=olX, overlapv=olY,
+				blksize=bsX, blksizev=bsY)
+		if r>=recalc-edges_recalc_proc-1:
+			# process edges with smaller block sizes
+			edges = core.mv.Degrain3(edges, sup, mvbw1, mvfw1, mvbw2,
+					mvfw2, mvbw3, mvfw3, thsad=edges_thsad, thsadc=edges_thsadc,
+					plane=plane)
+	if recalc==0 or edges_recalc_proc==0:
+		# process edges only once, using the finest block size
+		edges = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2, mvfw2, mvbw3,
+				mvfw3, thsad=edges_thsad, thsadc=edges_thsadc, plane=plane)
+	# process normal
 	normal = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2, mvfw2,
 			mvbw3, mvfw3, thsad=thsad, thsadc=thsadc, plane=plane)
-	edges = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2, mvfw2,
-			mvbw3, mvfw3, thsad=edges_thsad, thsadc=edges_thsadc, plane=plane)
+
+	# merge
 	clip = core.std.MaskedMerge(normal, edges, edgemask)
 
 	if mov_method>0:
-		# re-analyse the filtered image to avoid false reaction to noise
+		# analyse
+		olX = int(blksizeX/overlap)
+		olY = int(blksizeY/overlap)
 		sup = core.mv.Super(clip)
-		mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=overlapX,
-			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+		mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=olX,
+				overlapv=olY, blksize=blksizeX, blksizev=blksizeY)
 
 		# create motion mask
 		movmask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=mov_ml,
@@ -682,17 +725,17 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 		if mov_method==1:
 			# TBilateral
 			mov = core.tbilateral.TBilateral(clip, planes=[0],
-				diameter=mov_size, sdev=mov_sdev, idev=mov_idev)
+					diameter=mov_size, sdev=mov_sdev, idev=mov_idev)
 			mov = core.tbilateral.TBilateral(mov, planes=[1,2],
-				diameter=mov_sizec, sdev=mov_sdevc, idev=mov_idevc)
+					diameter=mov_sizec, sdev=mov_sdevc, idev=mov_idevc)
 		elif mov_method==2:
 			# BoxBlur
 			radius = int(mov_size/2)
 			radiusc = int(mov_sizec/2)
 			mov = core.std.BoxBlur(clip, planes=[0], hradius=radius,
-				vradius=radius)
+					vradius=radius)
 			mov = core.std.BoxBlur(mov, planes=[1,2], hradius=radiusc,
-				vradius=radiusc)
+					vradius=radiusc)
 		else:
 			# FlowBlur
 			mvbw = core.mv.Analyse(sup, isb=True, blksize=mov_blksize)
