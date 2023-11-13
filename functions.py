@@ -620,7 +620,7 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=12,
 # Requirements: MVTools or MVTools-Float, TBilateral
 
 def denoise2(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
-			thsad=300, thsadc=300, edges_recalc_proc=2, edges_thsad=1500,
+			thsad=300, thsadc=300, edges_recalc_proc=0, edges_thsad=1500,
 			edges_thsadc=1500, edges_threshold=63, edges_width=3,
 			edges_softness=3, edges_showmask=False, mov_method=1, mov_ml=20.0,
 			mov_softness=5, mov_th=100, mov_size=3, mov_sizec=5, mov_sdev=4,
