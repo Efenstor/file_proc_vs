@@ -1,5 +1,5 @@
 # FUNCTIONS.PY by Efenstor
-# Modified in December 2021
+# Modified in January 2023
 
 import vapoursynth as vs
 from vapoursynth import core
@@ -596,6 +596,37 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=12,
 
 #----------
 # Denoise2
+#----------
+def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
+			edges_thsad=1500, edges_thsadc=1500, edges_threshold=63,
+			edges_width=3, edges_softness=3, show_mask=False):
+
+	mask = core.std.Sobel(clip)
+	mask = core.std.Binarize(mask, threshold=edges_threshold)
+
+	hmask = mask
+	for i in range(0, edges_width):
+		hmask = core.std.Maximum(hmask)
+	if edges_softness>0:
+		mask = core.std.BoxBlur(hmask, hradius=edges_softness, hpasses=2,
+				vradius=edges_softness, vpasses=2)
+	else:
+		mask = hmask
+
+	if show_mask==True: return mask
+
+	sup = core.mv.Super(clip)
+	normal = denoise(clip, blksizeX, blksizeY, overlap, thsad, thsadc,
+		ext_super=sup)
+	edges = denoise(clip, blksizeX, blksizeY, overlap, edges_thsad,
+			edges_thsadc, ext_super=sup)
+	clip = core.std.MaskedMerge(normal, edges, mask)
+
+	return clip
+
+
+#----------
+# Denoise3
 # overlap is the div factor (e.g. overlap=2 means blksize/2)
 # recalc is the number of recalculations (e.g. for blksize=32 3 means 16,8,4)
 # edges_recalc_proc is the number of processing passes made on edges during
@@ -609,6 +640,8 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=12,
 # mov_sdev, mov_sdevc, mov_idev, mov_idevc - thresholds for mov_method=1:
 #   sdev=spatial deviations, the more the stronger
 #   idev=intensity deviations, the more the stronger
+# mov_antialias: 0..1 - additional light blur for motion areas (useful for
+#   TBilateral)
 #----------
 # Filters out noise using different approaches for static areas, for edges and
 # (optionally) for areas with strong motion. To tweak, first of all play with
@@ -619,13 +652,13 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=12,
 
 # Requirements: MVTools or MVTools-Float, TBilateral
 
-def denoise2(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
+def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
 			thsad=300, thsadc=300, edges_recalc_proc=0, edges_thsad=1500,
 			edges_thsadc=1500, edges_threshold=63, edges_width=3,
 			edges_softness=3, edges_showmask=False, mov_method=1, mov_ml=20.0,
 			mov_softness=5, mov_th=100, mov_size=3, mov_sizec=5, mov_sdev=4,
 			mov_sdevc=8, mov_idev=8, mov_idevc=4, mov_amount=0.7,
-			mov_showmask=False):
+			mov_antialias=1, mov_showmask=False):
 
 	# prepare some vars
 	if thsad==0: plane = 3
@@ -741,6 +774,12 @@ def denoise2(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
 			mvbw = core.mv.Analyse(sup, isb=True, blksize=mov_blksize)
 			mov = core.mv.FlowBlur(clip, sup, mvbw, mvfw, blur=mov_size)
 
+		# additional anti-alias
+		if mov_antialias>0:
+			mova = core.std.Convolution(mov, matrix=[0,1,0,1,2,1,0,1,0])
+			mov = core.std.Merge(mov, mova, mov_antialias)
+
+		# merge everything
 		movf = core.std.MaskedMerge(clip, mov, movmask)
 		clip = core.std.Merge(clip, movf, mov_amount)
 
