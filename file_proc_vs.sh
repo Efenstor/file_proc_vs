@@ -14,7 +14,7 @@
 ffmpeg_options_v="-c:v libx264 -crf 20 -tune film"
 ffmpeg_options_a="-c:a aac -b:a 256k"
 dst_ext_default="mkv"
-threads=4
+threads=8
 vspath=/usr/local/lib/python3.11/site-packages
 
 # Internal defines
@@ -26,7 +26,7 @@ YELLOW="\033[1;33m"
 NC="\033[0m"
 
 # Parse the named parameters
-optstr="?he:d:a:pnl"
+optstr="?he:d:a:pnlf"
 audio_track=0
 audio_delay=0
 while getopts $optstr opt; do
@@ -49,6 +49,9 @@ while getopts $optstr opt; do
     l) audio_delay_auto=true
        echo "Detect audio delay from source"
        ;;
+    f) fast_time=true
+       echo "Using fast and crude time to frame number conversion"
+       ;;
     :) echo "Missing argument for -$OPTARG" >&2
        exit 1
        ;;
@@ -64,19 +67,23 @@ if [ $# -lt 3 ]; then
 ${YELLOW}Convert a file using VapourSynth
 ${GREEN}(copyleft) Efenstor${NC}\n
 Usage: file_proc_vs [options] <src_file> <dst_dir> <proc.py> [start_time]
+       [start_frame]
 Options:
-  -e dst_ext  the destination file extension, e.g. mp4, mkv, etc.
-  -p          preview the output using mpv instead of doing conversion
-  -n          do not process audio
-  -d ms       audio delay in milliseconds
-  -l          get audio delay from source file (-d delay will be added to it)
-  -a num      audio track to use
+  -e dst_ext   the destination file extension, e.g. mp4, mkv, etc.
+  -p           preview the output using mpv instead of doing conversion
+  -n           do not process audio
+  -d ms        audio delay in milliseconds
+  -l           get audio delay from source file (-d delay will be added to it)
+  -a num       audio track to use
+  -f           use fast and crude time to frame number conversion (seconds*fps)
 Parameters:
-  src_file    source file to process and encode or preview
-  dst_dir     directory where the output file is to be placed, if it does not
-              exist it will be created
-  proc.py     VapourSynth script to be used for processing
-  start_time  start time in seconds
+  src_file     source file to process and encode or preview
+  dst_dir      directory where the output file is to be placed, if it does not
+               exist it will be created
+  proc.py      VapourSynth script to be used for processing
+  start_time   start time in seconds
+  start_frame  specify start frame directly to accelerate start (start_time
+               should also be specified for audio)
 
 ${CYAN}Note: dst_dir must be specified even if you're just previewing the output,
       because it's the directory where audio is pre-extracted and used with.${NC}
@@ -98,6 +105,9 @@ if [ "$4" ]; then
   video_start_time=$4
 else
   video_start_time=0
+fi
+if [ "$5" ]; then
+  start_frame=$5
 fi
 echo "Video start time: $video_start_time sec"
 if [ $audio_delay_auto ]; then
@@ -136,11 +146,21 @@ Double-check if it contains the audio you wanted!${NC}\n"
 fi
 
 # Find the start frame for the given start time
-echo "Detecting the start frame for the given start time"
-start_frame=$(ffmpeg -hide_banner -i "$src_file" \
-  -t $video_start_time -codec:v yuv4 -codec:a copy -f null /dev/null 2>&1 | \
-  sed -n "s/.*frame= *\([[:digit:]]*\).*/\1/p" | tail -n 1)
 echo "Start time: $video_start_time sec"
+if [ ! $start_frame ]; then
+  if [ ! $fast_time ]; then
+    # Precise calculation
+    echo "Detecting the start frame for the given start time"
+    start_frame=$(ffmpeg -hide_banner -i "$src_file" \
+      -t $video_start_time -codec:v yuv4 -codec:a copy -f null /dev/null 2>&1 | \
+      sed -n "s/.*frame= *\([[:digit:]]*\).*/\1/p" | tail -n 1)
+  else
+    # Fast calculation
+    fps=$(ffprobe -show_entries stream -select_streams v:0 -i src/minotaur1.mpg 2>&1 | \
+      sed -n "s/avg_frame_rate=//p")
+    start_frame=$(awk "BEGIN {print $video_start_time*($fps)}")
+  fi
+fi
 echo "Start frame: $start_frame"
 echo
 

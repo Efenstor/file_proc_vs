@@ -502,7 +502,8 @@ def unsharpmask(clip, strength=1, hradius=1, vradius=1, passes=2, planes=[0]):
 		vradius=vradius, hpasses=passes, vpasses=passes)
 	diff = core.std.MakeDiff(clip, blur, planes=planes)
 	sharp = core.std.MergeDiff(clip, diff, planes=planes)
-	clip = core.std.Merge(clip, sharp, strength)
+	if strength<1: clip = core.std.Merge(clip, sharp, strength)
+	else: clip = sharp
 
 	return clip
 
@@ -511,13 +512,9 @@ def unsharpmask(clip, strength=1, hradius=1, vradius=1, passes=2, planes=[0]):
 # Sharpen
 #---------
 # strength: 0..1
-# mode: s = square
-#		h = horizontal
-#		v = vertical
-
 # Requirements: none
 
-def sharpen(clip, strength=1, mode="s", planes=[0]):
+def sharpen(clip, strength=1, planes=[0]):
 
 	sh = core.std.Convolution(clip, matrix=[0, -1, 0, -1, 5, -1, 0, -1, 0], planes=planes)
 	clip = core.std.Merge(clip, sh, strength)
@@ -627,38 +624,47 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 
 #----------
 # Denoise3
-# overlap is the div factor (e.g. overlap=2 means blksize/2)
-# recalc is the number of recalculations (e.g. for blksize=32 3 means 16,8,4)
-# edges_recalc_proc is the number of processing passes made on edges during
-#   the recalculations, <=recalc; 0 means the edges will be processed after the
-#   last recalc, 1 = after each of the last two recalcs, and so on.
-# mov_ml - vector length for motion estimation: >0
-# mov_method: 0=disabled, 1=TBilateral, 2=BoxBlur, 3=FlowBlur
-# mov_size, mov_sizec - filtering size:
-#   for mov_method=1,2: odd numbers, 3..inf
-#   for mov_method=3: 0..100 (% of vector length), mov_sizec is ignored
-# mov_sdev, mov_sdevc, mov_idev, mov_idevc - thresholds for mov_method=1:
-#   sdev=spatial deviations, the more the stronger
-#   idev=intensity deviations, the more the stronger
-# mov_antialias: 0..1 - additional light blur for motion areas (useful for
-#   TBilateral)
+# overlap=div factor (>2; e.g. overlap=2 means blksize/2)
+# recalc=number of recalculations (0..3; e.g. for blksize=32 3 means 16,8,4)
+# edges_recalc_proc=number of processing passes made on edges during the
+#   recalculations (<=recalc; 0 means the edges will be processed after the
+#   last recalc, 1 = after each of the last two recalcs, and so on)
+# mov_ml=vector length for motion estimation (>0)
+# mov_method: 0=disabled, 1=TBilateral, 2=BoxBlur, 3=FlowBlur, 4=neo_fft3d
+# mov_params[] - filtering parameters:
+#   for mov_method=1:
+#     [0]=luma size (odd numbers, >3, 0=disabled)
+#     [1]=chroma size (odd numbers, >3, 0=disabled)
+#     [2,3]=spatial deviations (luma,chroma; >0)
+#     [4,5]=intensity deviations (luma,chroma; >0)
+#   for mov_method=2:
+#     [0]=luma size (odd numbers, >3, 0=disabled)
+#     [1]=chroma size (odd numbers, >3, 0=disabled)
+#   for mov_method=3:
+#     [0]=% of vector length(0..100)
+#   for mov_method=4:
+#     [0,1]=bt (luma, chroma; -1..5, 0=disabled)
+#     [2,3]=sigma (luma, chroma; >0, 0=disabled)
+#     [4]=block size(bw and bh)
+#     [5]=sharpen (>0, 0=disabled)
+# mov_amount=amount of filtering for motion areas (overlay amount; 0..1)
+# mov_antialias=additional light blur for motion areas (0..1)
 #----------
 # Filters out noise using different approaches for static areas, for edges and
 # (optionally) for areas with strong motion. To tweak, first of all play with
 # thsad, thsadc (filtering strength for static areas, luma and chroma),
-# edges_threshold, mov_ml (motion detection threshold), mov_size and mov_sizec
+# edges_threshold, mov_ml (motion detection threshold), mov_param1 and mov_param2
 # (filter size for areas with motion, luma and chroma). show_edgemask and
 # show_movmask may help quite a lot to find the correct values.
 
-# Requirements: MVTools or MVTools-Float, TBilateral
+# Requirements: MVTools or MVTools-Float, TBilateral, neo_fft3d
 
 def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
 			thsad=300, thsadc=300, edges_recalc_proc=0, edges_thsad=1500,
 			edges_thsadc=1500, edges_threshold=63, edges_width=3,
-			edges_softness=3, edges_showmask=False, mov_method=1, mov_ml=20.0,
-			mov_softness=5, mov_th=100, mov_size=3, mov_sizec=5, mov_sdev=4,
-			mov_sdevc=8, mov_idev=8, mov_idevc=4, mov_amount=0.7,
-			mov_antialias=1, mov_showmask=False):
+			edges_softness=3, edges_showmask=False, mov_method=4, mov_ml=20.0,
+			mov_softness=5, mov_th=100, mov_params=[2.0, 0, 2.0, 0, 64, 1.0],
+			mov_amount=0.7, mov_antialias=1, mov_showmask=False):
 
 	# prepare some vars
 	if thsad==0: plane = 3
@@ -757,22 +763,40 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
 		# denoise areas with motion
 		if mov_method==1:
 			# TBilateral
-			mov = core.tbilateral.TBilateral(clip, planes=[0],
-					diameter=mov_size, sdev=mov_sdev, idev=mov_idev)
-			mov = core.tbilateral.TBilateral(mov, planes=[1,2],
-					diameter=mov_sizec, sdev=mov_sdevc, idev=mov_idevc)
+			if mov_params[0]>0:
+				mov = core.tbilateral.TBilateral(clip, planes=[0],
+					diameter=mov_params[0], sdev=mov_params[2],
+					idev=mov_params[4])
+			if mov_params[1]>0:
+				mov = core.tbilateral.TBilateral(mov, planes=[1,2],
+					diameter=mov_params[1], sdev=mov_params[3],
+					idev=mov_params[5])
 		elif mov_method==2:
 			# BoxBlur
-			radius = int(mov_size/2)
-			radiusc = int(mov_sizec/2)
-			mov = core.std.BoxBlur(clip, planes=[0], hradius=radius,
+			radius = int(mov_params[0]/2)
+			radiusc = int(mov_params[1]/2)
+			if radius>0:
+				mov = core.std.BoxBlur(clip, planes=[0], hradius=radius,
 					vradius=radius)
-			mov = core.std.BoxBlur(mov, planes=[1,2], hradius=radiusc,
+			if radiusc>0:
+				mov = core.std.BoxBlur(mov, planes=[1,2], hradius=radiusc,
 					vradius=radiusc)
-		else:
+		elif mov_method==3:
 			# FlowBlur
 			mvbw = core.mv.Analyse(sup, isb=True, blksize=mov_blksize)
-			mov = core.mv.FlowBlur(clip, sup, mvbw, mvfw, blur=mov_size)
+			mov = core.mv.FlowBlur(clip, sup, mvbw, mvfw, blur=mov_params[0])
+		else:
+			# neo_fft3d
+			if mov_params[0]>0:
+				mov = core.neo_fft3d.FFT3D(clip, planes=[0], bt=mov_params[0],
+					sigma=mov_params[2], bw=mov_params[4], bh=mov_params[4],
+					ow=mov_params[4]/2, oh=mov_params[4]/2,
+					sharpen=mov_params[5])
+			if mov_params[1]>0:
+				mov = core.neo_fft3d.FFT3D(clip, planes=[1,2], bt=mov_params[1],
+					sigma=mov_params[3], bw=mov_params[4], bh=mov_params[4],
+					ow=mov_params[4]/2, oh=mov_params[4]/2,
+					sharpen=mov_params[5])
 
 		# additional anti-alias
 		if mov_antialias>0:
