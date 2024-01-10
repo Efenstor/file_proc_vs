@@ -638,7 +638,7 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 # thsad, thsadc: motion detection thresholds (luma, chroma)
 # edges_proc: enable processing of edges
 # edges_params[]:
-#   [0,1]: blksizeX, blksizeY
+#   [0,1]: blksizeX, blksizeY; 0 to re-use analysis for normal areas (faster)
 #   [2,3]: thsad, thsadc
 # edges_threshold: edge detection threshold
 # edges_width: width of the edge areas
@@ -656,8 +656,8 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 #   for mov_method=1:
 #     [0]: luma size (odd numbers, >3, 0=disabled)
 #     [1]: chroma size (odd numbers, >3, 0=disabled)
-#     [2,3]: spatial deviations (luma,chroma; >0)
-#     [4,5]: intensity deviations (luma,chroma; >0)
+#     [2,3]: spatial deviations (luma, chroma; >0)
+#     [4,5]: intensity deviations (luma, chroma; >0)
 #   for mov_method=2:
 #     [0]: luma size (odd numbers, >3, 0=disabled)
 #     [1]: chroma size (odd numbers, >3, 0=disabled)
@@ -666,7 +666,7 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 #   for mov_method=4:
 #     [0,1]: bt (luma, chroma; -1..5, -2=disabled)
 #     [2,3]: sigma (luma, chroma; >0, 0=disabled)
-#     [4]: block size(bw and bh)
+#     [4]: block size (bw and bh)
 #     [5]: sharpen (>0, 0=disabled)
 #     [6]: dehalo (>0, 0=disabled)
 # mov_ml: vector length for motion estimation for areas with motion (>0)
@@ -683,7 +683,7 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 # Requirements: MVTools or MVTools-Float, TBilateral, neo_fft3d
 
 def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
-			thsadc=300, edges_proc=False, edges_params=[8, 8, 1000, 1000],
+			thsadc=300, edges_proc=False, edges_params=[0, 0, 1000, 1000],
 			edges_threshold=63, edges_width=3, edges_softness=3,
 			edges_rotate=False, edges_showmask=False, mov_method=4,
 			mov_params=[2, 2, 2.0, 0, 64, 1.0], mov_ml=20.0, mov_th=100,
@@ -754,33 +754,40 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 
 	# process edges
 	if edges_proc==True:
-		if edges_params[0]>2: eolX = int(edges_params[0]/overlap)
-		else: eolX = 0
-		if edges_params[1]>2: eolY = int(edges_params[1]/overlap)
-		else: eolY = 0
-		if edges_rotate==True:
-			eclip = core.std.Transpose(clip)
-			esup = core.mv.Super(eclip)
+		if edges_params[0]>0 and edges_params[1]>0:
+			# do new analysis
+			if edges_params[0]>2: eolX = int(edges_params[0]/overlap)
+			else: eolX = 0
+			if edges_params[1]>2: eolY = int(edges_params[1]/overlap)
+			else: eolY = 0
+			if edges_rotate==True:
+				eclip = core.std.Transpose(clip)
+				esup = core.mv.Super(eclip)
+			else:
+				eclip = clip
+				esup = sup
+			emvbw1 = core.mv.Analyse(esup, isb=True, delta=1, overlap=eolX,
+					overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+			emvfw1 = core.mv.Analyse(esup, isb=False, delta=1, overlap=eolX,
+					overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+			emvbw2 = core.mv.Analyse(esup, isb=True, delta=2, overlap=eolX,
+					overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+			emvfw2 = core.mv.Analyse(esup, isb=False, delta=2, overlap=eolX,
+					overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+			emvbw3 = core.mv.Analyse(esup, isb=True, delta=3, overlap=eolX,
+					overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+			emvfw3 = core.mv.Analyse(esup, isb=False, delta=3, overlap=eolX,
+					overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+			edges = core.mv.Degrain3(eclip, esup, emvbw1, emvfw1, emvbw2,
+					emvfw2, emvbw3, emvfw3, thsad=edges_params[2],
+					thsadc=edges_params[3], plane=plane)
+			if edges_rotate==True:
+				edges = core.std.Transpose(edges)
 		else:
-			eclip = clip
-			esup = sup
-		emvbw1 = core.mv.Analyse(esup, isb=True, delta=1, overlap=eolX,
-				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
-		emvfw1 = core.mv.Analyse(esup, isb=False, delta=1, overlap=eolX,
-				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
-		emvbw2 = core.mv.Analyse(esup, isb=True, delta=2, overlap=eolX,
-				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
-		emvfw2 = core.mv.Analyse(esup, isb=False, delta=2, overlap=eolX,
-				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
-		emvbw3 = core.mv.Analyse(esup, isb=True, delta=3, overlap=eolX,
-				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
-		emvfw3 = core.mv.Analyse(esup, isb=False, delta=3, overlap=eolX,
-				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
-		edges = core.mv.Degrain3(eclip, esup, emvbw1, emvfw1, emvbw2,
-				emvfw2, emvbw3, emvfw3, thsad=edges_params[2],
-				thsadc=edges_params[3], plane=plane)
-		if edges_rotate==True:
-			edges = core.std.Transpose(edges)
+			# re-use analysis
+			edges = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2,
+					mvfw2, mvbw3, mvfw3, thsad=edges_params[2],
+					thsadc=edges_params[3], plane=plane)
 		# merge
 		clip = core.std.MaskedMerge(normal, edges, edgemask)
 	else:
