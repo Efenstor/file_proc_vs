@@ -626,48 +626,69 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 
 #----------
 # Denoise3
-# overlap=div factor (>2; e.g. overlap=2 means blksize/2)
-# recalc=number of recalculations (0..3; e.g. for blksize=32 3 means 16,8,4)
-# edges_recalc_proc=number of processing passes made on edges during the
-#   recalculations (<=recalc; 0 means the edges will be processed after the
-#   last recalc, 1 = after each of the last two recalcs, and so on)
-# mov_ml=vector length for motion estimation (>0)
-# mov_method: 0=disabled, 1=TBilateral, 2=BoxBlur, 3=FlowBlur, 4=neo_fft3d
-# mov_params[] - filtering parameters:
+#----------
+# Parameters:
+# blksizeX, blksizeY: block size for normal areas of the image, also the
+#   starting (largest) block size if there will be block recalculations to
+#   improve quality (supported block sizes: 4x4, 8x4, 8x8, 16x2, 16x8, 16x16,
+#   32x16, 32x32, 64x32, 64x64, 128x64, 128x128)
+# recalc: number of recalculations (>0; e.g. for blksize=32 3 means 16,8,4)
+# overlap: overlap size, also used for edges (block size div factor, e.g. for
+#   blksize=16 2 means 8)
+# thsad, thsadc: motion detection thresholds (luma, chroma)
+# edges_proc: enable processing of edges
+# edges_params[]:
+#   [0,1]: blksizeX, blksizeY
+#   [2,3]: thsad, thsadc
+# edges_threshold: edge detection threshold
+# edges_width: width of the edge areas
+# edges_softness: softness of the edge areas
+# edges_rotate: process edges at 90 deg; can be useful for certain scenarios,
+#   e.g. to reduce horizontal jitter or dot crawl
+# edges_showmask: display the edge mask (use for tweaking)
+# mov_method - filtering method for areas with motion:
+#    0: disabled
+#    1: TBilateral (good)
+#    2: BoxBlur (fast)
+#    3: FlowBlur (weird)
+#    4: neo_fft3d (best)
+# mov_params[] - filtering parameters for areas with motion:
 #   for mov_method=1:
-#     [0]=luma size (odd numbers, >3, 0=disabled)
-#     [1]=chroma size (odd numbers, >3, 0=disabled)
-#     [2,3]=spatial deviations (luma,chroma; >0)
-#     [4,5]=intensity deviations (luma,chroma; >0)
+#     [0]: luma size (odd numbers, >3, 0=disabled)
+#     [1]: chroma size (odd numbers, >3, 0=disabled)
+#     [2,3]: spatial deviations (luma,chroma; >0)
+#     [4,5]: intensity deviations (luma,chroma; >0)
 #   for mov_method=2:
-#     [0]=luma size (odd numbers, >3, 0=disabled)
-#     [1]=chroma size (odd numbers, >3, 0=disabled)
+#     [0]: luma size (odd numbers, >3, 0=disabled)
+#     [1]: chroma size (odd numbers, >3, 0=disabled)
 #   for mov_method=3:
-#     [0]=% of vector length(0..100)
+#     [0]: % of vector length(0..100)
 #   for mov_method=4:
-#     [0,1]=bt (luma, chroma; -1..5, -2=disabled)
-#     [2,3]=sigma (luma, chroma; >0, 0=disabled)
-#     [4]=block size(bw and bh)
-#     [5]=sharpen (>0, 0=disabled)
-#     [6]=dehalo (>0, 0=disabled)
-# mov_amount=amount of filtering for motion areas (overlay amount; 0..1)
-# mov_antialias=additional light blur for motion areas (0..1)
+#     [0,1]: bt (luma, chroma; -1..5, -2=disabled)
+#     [2,3]: sigma (luma, chroma; >0, 0=disabled)
+#     [4]: block size(bw and bh)
+#     [5]: sharpen (>0, 0=disabled)
+#     [6]: dehalo (>0, 0=disabled)
+# mov_ml: vector length for motion estimation for areas with motion (>0)
+# mov_th: mask threshold for the areas with motion
+# mov_softness: softness of mask for the areas with motion
+# mov_amount: transparency for the areas with motion (0..1)
+# mov_antialias: additional light blur for motion areas (0..1, useful for
+#   mov_method=1)
+# mov_showmask: show the detected areas (use for tweaking)
 #----------
 # Filters out noise using different approaches for static areas, for edges and
-# (optionally) for areas with strong motion. To tweak, first of all play with
-# thsad, thsadc (filtering strength for static areas, luma and chroma),
-# edges_threshold, mov_ml (motion detection threshold), mov_param1 and mov_param2
-# (filter size for areas with motion, luma and chroma). show_edgemask and
-# show_movmask may help quite a lot to find the correct values.
+# (optionally) for areas with strong motion
 
 # Requirements: MVTools or MVTools-Float, TBilateral, neo_fft3d
 
-def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
-			thsad=300, thsadc=300, edges_recalc_proc=0, edges_thsad=1500,
-			edges_thsadc=1500, edges_threshold=63, edges_width=3,
-			edges_softness=3, edges_showmask=False, mov_method=4, mov_ml=20.0,
-			mov_softness=5, mov_th=100, mov_params=[2, 2, 2.0, 0, 64, 1.0],
-			mov_amount=0.7, mov_antialias=1, mov_showmask=False):
+def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
+			thsadc=300, edges_proc=False, edges_params=[8, 8, 1000, 1000],
+			edges_threshold=63, edges_width=3, edges_softness=3,
+			edges_rotate=False, edges_showmask=False, mov_method=4,
+			mov_params=[2, 2, 2.0, 0, 64, 1.0], mov_ml=20.0, mov_th=100,
+			mov_softness=5, mov_amount=0.7, mov_antialias=0,
+			mov_showmask=False):
 
 	# prepare some vars
 	if thsad==0: plane = 3
@@ -707,13 +728,7 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
 			overlapv=olY, blksize=bsX, blksizev=bsY)
 	mvfw3 = core.mv.Analyse(sup, isb=False, delta=3, overlap=olX,
 			overlapv=olY, blksize=bsX, blksizev=bsY)
-	if recalc>0 and edges_recalc_proc>=recalc:
-		# if there will be recalcs and number of edge processing passes is the
-		# same then first process here, starting with the largest block size
-		edges = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2, mvfw2,
-				mvbw3, mvfw3, thsad=edges_thsad, thsadc=edges_thsadc,
-				plane=plane)
-	else: edges = clip
+	# do recalculations
 	for r in range(0, recalc):
 		bsX = bsX>>1
 		if bsX<4: break
@@ -733,21 +748,43 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
 				blksize=bsX, blksizev=bsY)
 		mvfw3 = core.mv.Recalculate(sup, mvfw3, overlap=olX, overlapv=olY,
 				blksize=bsX, blksizev=bsY)
-		if r>=recalc-edges_recalc_proc-1:
-			# process edges with smaller block sizes
-			edges = core.mv.Degrain3(edges, sup, mvbw1, mvfw1, mvbw2,
-					mvfw2, mvbw3, mvfw3, thsad=edges_thsad, thsadc=edges_thsadc,
-					plane=plane)
-	if recalc==0 or edges_recalc_proc==0:
-		# process edges only once, using the finest block size
-		edges = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2, mvfw2, mvbw3,
-				mvfw3, thsad=edges_thsad, thsadc=edges_thsadc, plane=plane)
-	# process normal
+	# process
 	normal = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2, mvfw2,
 			mvbw3, mvfw3, thsad=thsad, thsadc=thsadc, plane=plane)
 
-	# merge
-	clip = core.std.MaskedMerge(normal, edges, edgemask)
+	# process edges
+	if edges_proc==True:
+		if edges_params[0]>2: eolX = int(edges_params[0]/overlap)
+		else: eolX = 0
+		if edges_params[1]>2: eolY = int(edges_params[1]/overlap)
+		else: eolY = 0
+		if edges_rotate==True:
+			eclip = core.std.Transpose(clip)
+			esup = core.mv.Super(eclip)
+		else:
+			eclip = clip
+			esup = sup
+		emvbw1 = core.mv.Analyse(esup, isb=True, delta=1, overlap=eolX,
+				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+		emvfw1 = core.mv.Analyse(esup, isb=False, delta=1, overlap=eolX,
+				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+		emvbw2 = core.mv.Analyse(esup, isb=True, delta=2, overlap=eolX,
+				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+		emvfw2 = core.mv.Analyse(esup, isb=False, delta=2, overlap=eolX,
+				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+		emvbw3 = core.mv.Analyse(esup, isb=True, delta=3, overlap=eolX,
+				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+		emvfw3 = core.mv.Analyse(esup, isb=False, delta=3, overlap=eolX,
+				overlapv=eolY, blksize=edges_params[0], blksizev=edges_params[1])
+		edges = core.mv.Degrain3(eclip, esup, emvbw1, emvfw1, emvbw2,
+				emvfw2, emvbw3, emvfw3, thsad=edges_params[2],
+				thsadc=edges_params[3], plane=plane)
+		if edges_rotate==True:
+			edges = core.std.Transpose(edges)
+		# merge
+		clip = core.std.MaskedMerge(normal, edges, edgemask)
+	else:
+		clip = normal
 
 	if mov_method>0:
 		# analyse
