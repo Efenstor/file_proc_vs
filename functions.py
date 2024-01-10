@@ -678,12 +678,12 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 # mov_showmask: show the detected areas (use for tweaking)
 #----------
 # Filters out noise using different approaches for static areas, for edges and
-# (optionally) for areas with strong motion
+# for areas with strong motion
 
 # Requirements: MVTools or MVTools-Float, TBilateral, neo_fft3d
 
 def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
-			thsadc=300, edges_proc=False, edges_params=[0, 0, 1000, 1000],
+			thsadc=300, edges_proc=True, edges_params=[0, 0, 1000, 1000],
 			edges_threshold=63, edges_width=3, edges_softness=3,
 			edges_rotate=False, edges_showmask=False, mov_method=4,
 			mov_params=[2, 2, 2.0, 0, 64, 1.0], mov_ml=20.0, mov_th=100,
