@@ -643,10 +643,11 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 #   for mov_method=3:
 #     [0]=% of vector length(0..100)
 #   for mov_method=4:
-#     [0,1]=bt (luma, chroma; -1..5, 0=disabled)
+#     [0,1]=bt (luma, chroma; -1..5, -2=disabled)
 #     [2,3]=sigma (luma, chroma; >0, 0=disabled)
 #     [4]=block size(bw and bh)
 #     [5]=sharpen (>0, 0=disabled)
+#     [6]=dehalo (>0, 0=disabled)
 # mov_amount=amount of filtering for motion areas (overlay amount; 0..1)
 # mov_antialias=additional light blur for motion areas (0..1)
 #----------
@@ -663,7 +664,7 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
 			thsad=300, thsadc=300, edges_recalc_proc=0, edges_thsad=1500,
 			edges_thsadc=1500, edges_threshold=63, edges_width=3,
 			edges_softness=3, edges_showmask=False, mov_method=4, mov_ml=20.0,
-			mov_softness=5, mov_th=100, mov_params=[2.0, 0, 2.0, 0, 64, 1.0],
+			mov_softness=5, mov_th=100, mov_params=[2, 2, 2.0, 0, 64, 1.0],
 			mov_amount=0.7, mov_antialias=1, mov_showmask=False):
 
 	# prepare some vars
@@ -787,16 +788,16 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
 			mov = core.mv.FlowBlur(clip, sup, mvbw, mvfw, blur=mov_params[0])
 		else:
 			# neo_fft3d
-			if mov_params[0]>0:
+			if mov_params[0]>-2:
 				mov = core.neo_fft3d.FFT3D(clip, planes=[0], bt=mov_params[0],
 					sigma=mov_params[2], bw=mov_params[4], bh=mov_params[4],
 					ow=mov_params[4]/2, oh=mov_params[4]/2,
-					sharpen=mov_params[5])
-			if mov_params[1]>0:
+					sharpen=mov_params[5], dehalo=mov_params[6])
+			if mov_params[1]>-2:
 				mov = core.neo_fft3d.FFT3D(clip, planes=[1,2], bt=mov_params[1],
 					sigma=mov_params[3], bw=mov_params[4], bh=mov_params[4],
 					ow=mov_params[4]/2, oh=mov_params[4]/2,
-					sharpen=mov_params[5])
+					sharpen=mov_params[5], dehalo=mov_params[6])
 
 		# additional anti-alias
 		if mov_antialias>0:
