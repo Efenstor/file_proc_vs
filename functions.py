@@ -54,8 +54,10 @@ def ivtc(clip):
 def denoise(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=200, thsadc=400,
 		ext_super=None):
 
-	overlapX = int(blksizeX/overlap)
-	overlapY = int(blksizeY/overlap)
+	if blksizeX>2: overlapX = int(blksizeX/overlap)
+	else: overlapX=0
+	if blksizeY>2: overlapY = int(blksizeY/overlap)
+	else: overlapY=0
 
 	if ext_super==None:
 		sup = core.mv.Super(clip)
@@ -688,8 +690,10 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2,
 	# denoise picture
 	bsX = blksizeX
 	bsY = blksizeY
-	olX = int(bsX/overlap)
-	olY = int(bsY/overlap)
+	if bsX>2: olX = int(bsX/overlap)
+	else: olX = 0
+	if bsY>2: olY = int(bsY/overlap)
+	else: olY = 0
 	sup = core.mv.Super(clip)
 	mvbw1 = core.mv.Analyse(sup, isb=True, delta=1, overlap=olX,
 			overlapv=olY, blksize=bsX, blksizev=bsY)
