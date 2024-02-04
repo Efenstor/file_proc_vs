@@ -9,6 +9,8 @@ To set the ffmpeg encoding parameters edit the *ffmpeg_options_v* (video) and *f
 
 If the script fails with something like *"Permission denied ... Failed to recognize file format"*, uncomment and edit the *vspath* variable at the beginning of the script to point to the location of *vapoursynth.so*.
 
+If you're encoding video from a DVD source it is highly recommended to use the '-l' option to avoid audio delay issues.
+
 **batch_proc_vs.sh**
 
 A script for batch processing of many files. Executes *file_proc_vs.sh* for each file in a specified dir.
