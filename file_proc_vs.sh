@@ -114,9 +114,11 @@ if [ "$6" ]; then
 fi
 echo "Video start time: $video_start_time sec"
 if [ $audio_delay_auto ]; then
-  audio_delay_base=$(ffprobe -show_entries stream -select_streams a:0 -i "ruscico/VTS_03_1.VOB" 2>&1 | sed -n "s/start_time=//p")
+  video_delay_base=$(ffprobe -show_entries stream -select_streams v:0 -i "$src_file" 2>&1 | sed -n "s/start_time=//p")
+  echo "Video delay in the input file: $video_delay_base sec"
+  audio_delay_base=$(ffprobe -show_entries stream -select_streams a:0 -i "$src_file" 2>&1 | sed -n "s/start_time=//p")
   echo "Audio delay in the input file: $audio_delay_base sec"
-  audio_start_time=$(awk "BEGIN {print $video_start_time-$audio_delay_base+$audio_delay}")
+  audio_start_time=$(awk "BEGIN {print $video_start_time-$audio_delay_base+$video_delay_base+$audio_delay}")
 else
   audio_start_time=$(awk "BEGIN {print $video_start_time+$audio_delay}")
 fi

@@ -424,11 +424,11 @@ def decanon(clip, ml=40, quant=40, skip_decomb=False):
 #---------
 # Requirements: DeblockPP7
 
-def deblock(clip, blksize=8, qp=8.0, ml=16.0):
+def deblock(clip, blksize=8, qp=8.0, ml=16.0, mode=0):
 
 	overlap = int(blksize/2)
 
-	deblock = core.pp7.DeblockPP7(clip=clip, qp=qp)
+	deblock = core.pp7.DeblockPP7(clip, qp=qp, mode=mode)
 	sup = core.mv.Super(clip)
 	mvfw = core.mv.Analyse(sup, isb=False, blksize=blksize, overlap=overlap)
 	mask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=ml, gamma=1.0)
@@ -647,7 +647,7 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 #   e.g. to reduce horizontal jitter or dot crawl
 # edges_showmask: display the edge mask (use for tweaking)
 # mov_method - filtering method for areas with motion:
-#    0: disabled
+#    0: disabled (deblocking will still be performed if mov_deblock_qp>0)
 #    1: TBilateral (good)
 #    2: BoxBlur (fast)
 #    3: FlowBlur (weird)
@@ -662,7 +662,9 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 #     [0]: luma size (odd numbers, >3, 0=disabled)
 #     [1]: chroma size (odd numbers, >3, 0=disabled)
 #   for mov_method=3:
-#     [0]: % of vector length(0..100)
+#     [0]: block size (>4, powers of 4)
+#     [1]: overlap (>0)
+#     [2]: % of vector length(0..100)
 #   for mov_method=4:
 #     [0,1]: bt (luma, chroma; -1..5, -2=disabled)
 #     [2,3]: sigma (luma, chroma; >0, 0=disabled)
@@ -675,12 +677,14 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 # mov_amount: transparency for the areas with motion (0..1)
 # mov_antialias: additional light blur for motion areas (0..1, useful for
 #   mov_method=1)
+# mov_deblock_qp: motion areas deblock quantizer (1..63, 0=disabled)
+# mov_deblock_mode: motion areas deblock mode (0=hard, 1=soft, 2=medium)
 # mov_showmask: show the detected areas (use for tweaking)
 #----------
 # Filters out noise using different approaches for static areas, for edges and
 # for areas with strong motion
 
-# Requirements: MVTools or MVTools-Float, TBilateral, neo_fft3d
+# Requirements: MVTools or MVTools-Float, TBilateral, neo_fft3d, DeblockPP7
 
 def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 			thsadc=300, edges_proc=True, edges_params=[0, 0, 1000, 1000],
@@ -688,6 +692,7 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 			edges_rotate=False, edges_showmask=False, mov_method=4,
 			mov_params=[2, 2, 2.0, 0, 64, 0, 0], mov_ml=20.0, mov_th=100,
 			mov_softness=5, mov_amount=0.7, mov_antialias=0,
+			mov_deblock_qp=0, mov_deblock_mode=0,
 			mov_showmask=False):
 
 	# prepare some vars
@@ -793,7 +798,7 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 	else:
 		clip = normal
 
-	if mov_method>0:
+	if mov_method>0 or mov_deblock_qp>0:
 		# analyse
 		olX = int(blksizeX/overlap)
 		olY = int(blksizeY/overlap)
@@ -810,10 +815,16 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 		if mov_showmask==True: return movmask
 
 		# denoise areas with motion
+		if mov_deblock_qp>0:
+			# deblock before processing
+			pre = core.pp7.DeblockPP7(clip, qp=mov_deblock_qp,
+				mode=mov_deblock_mode)
+		else:
+			pre = clip
 		if mov_method==1:
 			# TBilateral
 			if mov_params[0]>0:
-				mov = core.tbilateral.TBilateral(clip, planes=[0],
+				mov = core.tbilateral.TBilateral(pre, planes=[0],
 					diameter=mov_params[0], sdev=mov_params[2],
 					idev=mov_params[4])
 			if mov_params[1]>0:
@@ -825,27 +836,34 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 			radius = int(mov_params[0]/2)
 			radiusc = int(mov_params[1]/2)
 			if radius>0:
-				mov = core.std.BoxBlur(clip, planes=[0], hradius=radius,
+				mov = core.std.BoxBlur(pre, planes=[0], hradius=radius,
 					vradius=radius)
 			if radiusc>0:
 				mov = core.std.BoxBlur(mov, planes=[1,2], hradius=radiusc,
 					vradius=radiusc)
 		elif mov_method==3:
 			# FlowBlur
-			mvbw = core.mv.Analyse(sup, isb=True, blksize=mov_blksize)
-			mov = core.mv.FlowBlur(clip, sup, mvbw, mvfw, blur=mov_params[0])
-		else:
+			olFB = int(mov_params[0]/mov_params[1])
+			mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=olFB,
+				blksize=mov_params[0])
+			mvbw = core.mv.Analyse(sup, isb=True, delta=1, overlap=olFB,
+				blksize=mov_params[0])
+			mov = core.mv.FlowBlur(pre, sup, mvbw, mvfw, blur=mov_params[2])
+		elif mov_method==4:
 			# neo_fft3d
 			if mov_params[0]>-2:
-				mov = core.neo_fft3d.FFT3D(clip, planes=[0], bt=mov_params[0],
+				mov = core.neo_fft3d.FFT3D(pre, planes=[0], bt=mov_params[0],
 					sigma=mov_params[2], bw=mov_params[4], bh=mov_params[4],
 					ow=mov_params[4]/2, oh=mov_params[4]/2,
 					sharpen=mov_params[5], dehalo=mov_params[6])
 			if mov_params[1]>-2:
-				mov = core.neo_fft3d.FFT3D(clip, planes=[1,2], bt=mov_params[1],
+				mov = core.neo_fft3d.FFT3D(pre, planes=[1,2], bt=mov_params[1],
 					sigma=mov_params[3], bw=mov_params[4], bh=mov_params[4],
 					ow=mov_params[4]/2, oh=mov_params[4]/2,
 					sharpen=mov_params[5], dehalo=mov_params[6])
+		else:
+			# only deblocking or nothing at all
+			mov = pre
 
 		# additional anti-alias
 		if mov_antialias>0:
