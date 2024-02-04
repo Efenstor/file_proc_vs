@@ -1,6 +1,6 @@
 #!/bin/sh
 # (copyleft) Efenstor 2015-2023
-# Revision 2023-10-27
+# Revision 2024-01-12
 
 # Examples:
 # ffmpeg_options_v="-c:v libx264 -crf 16 -preset fast -tune film"
@@ -67,7 +67,7 @@ if [ $# -lt 3 ]; then
 ${YELLOW}Convert a file using VapourSynth
 ${GREEN}(copyleft) Efenstor${NC}\n
 Usage: file_proc_vs [options] <src_file> <dst_dir> <proc.py> [start_time]
-       [start_frame]
+       [start_frame] [end_frame]
 Options:
   -e dst_ext   the destination file extension, e.g. mp4, mkv, etc.
   -p           preview the output using mpv instead of doing conversion
@@ -108,6 +108,9 @@ else
 fi
 if [ "$5" ]; then
   start_frame=$5
+fi
+if [ "$6" ]; then
+  end_frame=$6
 fi
 echo "Video start time: $video_start_time sec"
 if [ $audio_delay_auto ]; then
@@ -162,6 +165,9 @@ if [ ! $start_frame ]; then
   fi
 fi
 echo "Start frame: $start_frame"
+if [ $end_frame ]; then
+  echo "End frame: $end_frame"
+fi
 echo
 
 # Process video (and mux with audio)
@@ -174,12 +180,14 @@ if [ ! $mpv ]; then
   echo "Encoding..."
   if [ ! $no_audio ]; then
     env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
-      -c y4m "$script" -p -r $threads -s $start_frame - | ffmpeg -i pipe: \
+      -c y4m "$script" -p -r $threads -s $start_frame \
+      ${end_frame:+-e $end_frame} - | ffmpeg -i pipe: \
       -ss $audio_start_time -i "$audio" -map 0:v:0 -map 1:a:0 \
       $ffmpeg_options_v $ffmpeg_options_a "$dst"
   else
     env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
-      -c y4m "$script" -p -r $threads -s $start_frame - | ffmpeg -i pipe: \
+      -c y4m "$script" -p -r $threads -s $start_frame \
+      ${end_frame:+-e $end_frame} - | ffmpeg -i pipe: \
       $ffmpeg_options_v -c:a none "$dst"
   fi
   # Cancelled
@@ -194,12 +202,14 @@ else
   if [ ! $no_audio ]; then
     # With audio
     env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
-      -c y4m "$script" -p -r $threads -s $start_frame - | \
+      -c y4m "$script" -p -r $threads -s $start_frame \
+      ${end_frame:+-e $end_frame} - | \
       mpv --audio-file="$audio" --audio-delay=-$audio_start_time --fs -
   else
     # Without audio
     env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
-      -c y4m "$script" -p -r $threads -s $start_frame - | \
+      -c y4m "$script" -p -r $threads -s $start_frame \
+      ${end_frame:+-e $end_frame} - | \
       mpv --fs -
   fi
   # Cancelled
