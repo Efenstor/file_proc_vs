@@ -159,7 +159,7 @@ if [ ! $start_frame ]; then
       sed -n "s/.*frame= *\([[:digit:]]*\).*/\1/p" | tail -n 1)
   else
     # Fast calculation
-    fps=$(ffprobe -show_entries stream -select_streams v:0 -i src/minotaur1.mpg 2>&1 | \
+    fps=$(ffprobe -show_entries stream -select_streams v:0 -i "$src_file" 2>&1 | \
       sed -n "s/avg_frame_rate=//p")
     start_frame=$(awk "BEGIN {print $video_start_time*($fps)}")
   fi
