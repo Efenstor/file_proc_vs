@@ -560,7 +560,7 @@ def dehalo(clip, edge_gamma=0.7, hl_th=63, offset=1, halo_width=12,
 		mask = core.std.Expr([hmask, smask], "x y -")
 
 		# subtract the hightlight areas from the halo areas
-		hlmask = core.std.Binarize(clip, threshold=hl_th, planes=planes)
+		hlmask = core.std.BinarizeMask(clip, threshold=hl_th, planes=planes)
 		if show_hl==True: return hlmask
 		mask = core.std.Expr([mask, hlmask], "x y -")
 
@@ -601,7 +601,7 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 			edges_width=3, edges_softness=3, show_mask=False):
 
 	mask = core.std.Sobel(clip)
-	mask = core.std.Binarize(mask, threshold=edges_threshold)
+	mask = core.std.BinarizeMask(mask, threshold=edges_threshold)
 
 	hmask = mask
 	for i in range(0, edges_width):
@@ -702,15 +702,12 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 
 	# create edge mask
 	edgemask = core.std.Sobel(clip)
-	edgemask = core.std.Binarize(edgemask, threshold=edges_threshold)
-	hmask = edgemask
+	edgemask = core.std.BinarizeMask(edgemask, threshold=edges_threshold)
 	for i in range(0, edges_width):
-		hmask = core.std.Maximum(hmask)
+		edgemask = core.std.Maximum(edgemask)
 	if edges_softness>0:
-		edgemask = core.std.BoxBlur(hmask, hradius=edges_softness, hpasses=2,
+		edgemask = core.std.BoxBlur(edgemask, hradius=edges_softness, hpasses=2,
 				vradius=edges_softness, vpasses=2)
-	else:
-		edgemask = hmask
 	if edges_showmask==True: return edgemask
 
 	# denoise picture
@@ -809,7 +806,7 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 		# create motion mask
 		movmask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=mov_ml,
 			gamma=1.0)
-		movmask = core.std.Binarize(movmask, threshold=mov_th)
+		movmask = core.std.BinarizeMask(movmask, threshold=mov_th)
 		movmask = core.std.BoxBlur(movmask, hradius=mov_softness, hpasses=2,
 				vradius=mov_softness, vpasses=2)
 		if mov_showmask==True: return movmask
@@ -959,6 +956,39 @@ def deghost(clip, th=70, mode=3, shift=-4, intensity=50, expand=2, softness=2,
 
 	# merge
 	clip = core.std.MaskedMerge(clip, dg, mask, planes=planes)
+
+	return clip
+
+#----------
+# ASharpen
+#----------
+# Better ASharp which does not oversharp contrast edges
+# Requirements: ASharp
+
+def asharpen(clip, t=1.0, d=0.0, b=-1.0, hqbf=False, edges_thr=127,
+	edges_pow=63, edges_det_width=2, edges_det_pow=1, edges_expand=2,
+	edges_softness=2, edges_showmask=False):
+
+	# create edge mask
+	blurred = core.std.BoxBlur(clip, hradius=edges_det_width,
+			vradius=edges_det_width, hpasses=edges_det_pow,
+			vpasses=edges_det_pow)
+	edgemask = core.std.MakeDiff(clip, blurred)
+	edgemask = core.std.Prewitt(edgemask)
+	for i in range(0, edges_expand):
+		edgemask = core.std.Maximum(edgemask)
+	if edges_softness>0:
+		edgemask = core.std.BoxBlur(edgemask, hradius=edges_softness, hpasses=2,
+				vradius=edges_softness, vpasses=2)
+	edgemask = core.std.Levels(edgemask, min_in=edges_thr,
+			max_in=255-edges_pow, min_out=0, max_out=255)
+	if edges_showmask==True: return edgemask
+
+	# sharpen
+	sharp = core.asharp.ASharp(clip, t, d, b, hqbf)
+
+	# merge excluding contrast edges
+	clip = core.std.MaskedMerge(sharp, clip, edgemask)
 
 	return clip
 
