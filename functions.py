@@ -967,7 +967,7 @@ def deghost(clip, th=70, mode=3, shift=-4, intensity=50, expand=2, softness=2,
 
 def asharpen(clip, t=1.0, d=0.0, b=-1.0, hqbf=False, edges_thr=127,
 	edges_pow=63, edges_det_width=2, edges_det_pow=1, edges_expand=2,
-	edges_softness=2, edges_showmask=False):
+	edges_softness=2, edges_frame=2, edges_showmask=False):
 
 	# create edge mask
 	blurred = core.std.BoxBlur(clip, hradius=edges_det_width,
@@ -977,6 +977,11 @@ def asharpen(clip, t=1.0, d=0.0, b=-1.0, hqbf=False, edges_thr=127,
 	edgemask = core.std.Prewitt(edgemask)
 	for i in range(0, edges_expand):
 		edgemask = core.std.Maximum(edgemask)
+	if edges_frame>0:
+		edgemask = core.std.Crop(edgemask, edges_frame, edges_frame,
+				edges_frame, edges_frame)
+		edgemask = core.std.AddBorders(edgemask, edges_frame, edges_frame,
+				edges_frame, edges_frame, [255,0,0])
 	if edges_softness>0:
 		edgemask = core.std.BoxBlur(edgemask, hradius=edges_softness, hpasses=2,
 				vradius=edges_softness, vpasses=2)
