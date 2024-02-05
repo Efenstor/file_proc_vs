@@ -34,7 +34,7 @@ while getopts $optstr opt; do
     e) dst_ext=$OPTARG
        echo "Destination extension: $dst_ext"
        ;;
-    d) audio_delay=$(awk "BEGIN {print $OPTARG/1000}")
+    d) audio_delay=$(awk "BEGIN {print ($OPTARG)/1000}")
        echo "Audio delay: $audio_delay sec"
        ;;
     a) audio_track=$OPTARG
@@ -118,9 +118,9 @@ if [ $audio_delay_auto ]; then
   echo "Video delay in the input file: $video_delay_base sec"
   audio_delay_base=$(ffprobe -show_entries stream -select_streams a:0 -i "$src_file" 2>&1 | sed -n "s/start_time=//p")
   echo "Audio delay in the input file: $audio_delay_base sec"
-  audio_start_time=$(awk "BEGIN {print $video_start_time-$audio_delay_base+$video_delay_base+$audio_delay}")
+  audio_start_time=$(awk "BEGIN {print ($video_start_time)-($audio_delay_base)+($video_delay_base)+($audio_delay)}")
 else
-  audio_start_time=$(awk "BEGIN {print $video_start_time+$audio_delay}")
+  audio_start_time=$(awk "BEGIN {print ($video_start_time)+($audio_delay)}")
 fi
 echo "Audio start time: $audio_start_time sec"
 src=$(basename "$src_file")
@@ -163,7 +163,7 @@ if [ ! $start_frame ]; then
     # Fast calculation
     fps=$(ffprobe -show_entries stream -select_streams v:0 -i "$src_file" 2>&1 | \
       sed -n "s/avg_frame_rate=//p")
-    start_frame=$(awk "BEGIN {print $video_start_time*($fps)}")
+    start_frame=$(awk "BEGIN {print ($video_start_time)*($fps)}")
   fi
 fi
 echo "Start frame: $start_frame"
@@ -206,7 +206,9 @@ else
     env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
       -c y4m "$script" -p -r $threads -s $start_frame \
       ${end_frame:+-e $end_frame} - | \
-      mpv --audio-file="$audio" --audio-delay=-$audio_start_time --fs -
+      mpv --audio-file="$audio" \
+      	--audio-delay=$(awk "BEGIN {print -($audio_start_time)}") \
+      	--fs -
   else
     # Without audio
     env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
