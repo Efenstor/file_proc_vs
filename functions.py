@@ -1,5 +1,5 @@
 # FUNCTIONS.PY by Efenstor
-# Modified in January 2023
+# Modified in February 2024
 
 import vapoursynth as vs
 from vapoursynth import core
@@ -646,13 +646,14 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 # edges_rotate: process edges at 90 deg; can be useful for certain scenarios,
 #   e.g. to reduce horizontal jitter or dot crawl
 # edges_showmask: display the edge mask (use for tweaking)
-# mov_method - filtering method for areas with motion:
-#    0: disabled (deblocking will still be performed if mov_deblock_qp>0)
+# mov_proc - enable processing of motion areas
+# mov_method - filtering method for motion areas:
+#    0: None, only deblocking if mov_deblock_qp>0
 #    1: TBilateral (good)
 #    2: BoxBlur (fast)
 #    3: FlowBlur (weird)
 #    4: neo_fft3d (best)
-# mov_params[] - filtering parameters for areas with motion:
+# mov_params[] - filtering parameters for motion areas:
 #   for mov_method=1:
 #     [0]: luma size (odd numbers, >3, 0=disabled)
 #     [1]: chroma size (odd numbers, >3, 0=disabled)
@@ -671,15 +672,15 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 #     [4]: block size (bw and bh)
 #     [5]: sharpen (>0, 0=disabled)
 #     [6]: dehalo (>0, 0=disabled)
-# mov_ml: vector length for motion estimation for areas with motion (>0)
-# mov_th: mask threshold for the areas with motion
-# mov_softness: softness of mask for the areas with motion
-# mov_amount: transparency for the areas with motion (0..1)
+# mov_ml: vector length for motion estimation for motion areas (>0)
+# mov_th: mask threshold for motion areas
+# mov_softness: softness of mask for motion areas
+# mov_amount: transparency for motion areas (0..1)
 # mov_antialias: additional light blur for motion areas (0..1, useful for
 #   mov_method=1)
 # mov_deblock_qp: motion areas deblock quantizer (1..63, 0=disabled)
 # mov_deblock_mode: motion areas deblock mode (0=hard, 1=soft, 2=medium)
-# mov_showmask: show the detected areas (use for tweaking)
+# mov_showmask: show the detected motion areas (use for tweaking)
 #----------
 # Filters out noise using different approaches for static areas, for edges and
 # for areas with strong motion
@@ -689,11 +690,10 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 			thsadc=300, edges_proc=True, edges_params=[0, 0, 1000, 1000],
 			edges_threshold=63, edges_width=3, edges_softness=3,
-			edges_rotate=False, edges_showmask=False, mov_method=4,
-			mov_params=[2, 2, 2.0, 0, 64, 0, 0], mov_ml=20.0, mov_th=100,
-			mov_softness=5, mov_amount=0.7, mov_antialias=0,
-			mov_deblock_qp=0, mov_deblock_mode=0,
-			mov_showmask=False):
+			edges_rotate=False, edges_showmask=False, mov_proc=False,
+			mov_method=4, mov_params=[2, 2, 2.0, 0, 64, 0, 0], mov_ml=20.0,
+			mov_th=100, mov_softness=5, mov_amount=0.7, mov_antialias=0,
+			mov_deblock_qp=0, mov_deblock_mode=0, mov_showmask=False):
 
 	# prepare some vars
 	if thsad==0: plane = 3
@@ -795,29 +795,31 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 	else:
 		clip = normal
 
-	if mov_method>0 or mov_deblock_qp>0:
-		# analyse
-		olX = int(blksizeX/overlap)
-		olY = int(blksizeY/overlap)
-		sup = core.mv.Super(clip)
-		mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=olX,
-				overlapv=olY, blksize=blksizeX, blksizev=blksizeY)
+	if mov_proc==True:
+		if mov_method>0:
+			# analyse
+			olX = int(blksizeX/overlap)
+			olY = int(blksizeY/overlap)
+			sup = core.mv.Super(clip)
+			mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=olX,
+					overlapv=olY, blksize=blksizeX, blksizev=blksizeY)
 
-		# create motion mask
-		movmask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=mov_ml,
-			gamma=1.0)
-		movmask = core.std.BinarizeMask(movmask, threshold=mov_th)
-		movmask = core.std.BoxBlur(movmask, hradius=mov_softness, hpasses=2,
-				vradius=mov_softness, vpasses=2)
-		if mov_showmask==True: return movmask
+			# create motion mask
+			movmask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=mov_ml,
+				gamma=1.0)
+			movmask = core.std.BinarizeMask(movmask, threshold=mov_th)
+			movmask = core.std.BoxBlur(movmask, hradius=mov_softness, hpasses=2,
+					vradius=mov_softness, vpasses=2)
+			if mov_showmask==True: return movmask
 
-		# denoise areas with motion
+		# deblock before processing
 		if mov_deblock_qp>0:
-			# deblock before processing
 			pre = core.pp7.DeblockPP7(clip, qp=mov_deblock_qp,
 				mode=mov_deblock_mode)
 		else:
 			pre = clip
+
+		# denoise areas with motion
 		if mov_method==1:
 			# TBilateral
 			if mov_params[0]>0:
@@ -859,7 +861,7 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 					ow=mov_params[4]/2, oh=mov_params[4]/2,
 					sharpen=mov_params[5], dehalo=mov_params[6])
 		else:
-			# only deblocking or nothing at all
+			# none, only deblocking
 			mov = pre
 
 		# additional anti-alias
