@@ -1,6 +1,6 @@
 #!/bin/sh
-# (copyleft) Efenstor 2015-2023
-# Revision 2024-01-12
+# (copyleft) Efenstor 2015-2024
+# Revision 2024-02-10
 
 # Examples:
 # ffmpeg_options_v="-c:v libx264 -crf 16 -preset fast -tune film"
@@ -66,10 +66,11 @@ if [ $# -lt 3 ]; then
   printf "
 ${YELLOW}Convert a file using VapourSynth
 ${GREEN}(copyleft) Efenstor${NC}\n
-Usage: file_proc_vs [options] <src_file> <dst_dir> <proc.py> [start_time]
+Usage: file_proc_vs [options] <src_file> <dst> <proc.py> [start_time]
        [start_frame] [end_frame]
 Options:
-  -e dst_ext   the destination file extension, e.g. mp4, mkv, etc.
+  -e dst_ext   destination file extension, defines container format; if it is
+               specified then <dst> will always be treated as a directory name
   -p           preview the output using mpv instead of doing conversion
   -n           do not process audio
   -d ms        audio delay in milliseconds
@@ -77,13 +78,17 @@ Options:
   -a num       audio track to use
   -f           use fast and crude time to frame number conversion (seconds*fps)
 Parameters:
-  src_file     source file to process and encode or preview
-  dst_dir      directory where the output file is to be placed, if it does not
-               exist it will be created
-  proc.py      VapourSynth script to be used for processing
-  start_time   start time in seconds
-  start_frame  specify start frame directly to accelerate start (start_time
-               should also be specified for audio)
+  <src_file>    source file to process and encode or preview
+  <dst>         file or directory where the output file is to be placed;
+                if <dst> has no extension then it is assumed than it is a
+                directory, if it does not exist it will be created; extracted
+                audio file is placed next to the output file; existing files are
+                overwritten silentily
+  <proc.py>     VapourSynth script to be used for processing
+  [start_time]  start time in seconds
+  [start_frame] specify start frame directly to accelerate start (start_time
+                should also be specified if audio is used)
+  [end_frame]   end frame
 
 ${CYAN}Note: dst_dir must be specified even if you're just previewing the output,
       because it's the directory where audio is pre-extracted and used with.${NC}
@@ -91,15 +96,29 @@ ${CYAN}Note: dst_dir must be specified even if you're just previewing the output
   exit
 fi
 
-# Default extension
+# Determine if dst is a file or a dir
 if [ ! "$dst_ext" ]; then
-  echo "Using the default extension \"$dst_ext_default\""
-  dst_ext=$dst_ext_default
+  # Extension not specified directly with an -e parameter
+  ext="${2##*.}"
+  if [ "$ext" = "$2" ]; then ext= ; fi
+  echo "ext: $ext"
+  if [ $(echo "$2" | sed "s/.*\/$//g") ] && [ "$ext" ]; then
+    # dst not ending with a / and has some extension
+    dst="$2"
+    dst_dir=$(dirname "$2")
+    dst_ext="$ext"
+  else
+    dst_ext=$dst_ext_default
+    echo "Destination extension: $dst_ext"
+  fi
 fi
 
 # Prepare some vars
 src_file="$1"
-dst_dir="$2"
+if [ ! "$dst_dir" ]; then
+  echo "Destination dir: \"$dst\""
+  dst_dir="$2"
+fi
 script="$3"
 if [ "$4" ]; then
   video_start_time=$4
@@ -124,8 +143,11 @@ else
 fi
 echo "Audio start time: $audio_start_time sec"
 src=$(basename "$src_file")
-audio=$dst_dir/${src%.*}.wav
-dst=$dst_dir/${src%.*}.$dst_ext
+audio="$dst_dir/$src".wav
+if [ ! "$dst" ]; then
+  dst="$dst_dir/${src%.*}.$dst_ext"
+  echo "Destination file: \"$dst\""
+fi
 
 # Create the output directory
 if [ ! -e "$dst_dir" ] || [ ! -d "$dst_dir" ]; then
@@ -175,7 +197,7 @@ echo
 # Process video (and mux with audio)
 if [ ! $mpv ]; then
   # Remove the file if already exists
-  if [ -e "$dst" ]; then
+  if [ -e "$dst" ] && [ -f "$dst" ]; then
     rm "$dst"
   fi
   # Encode
