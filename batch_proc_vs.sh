@@ -62,7 +62,7 @@ fi
 # Do processing
 src_dir="$1"
 src_ext="$2"
-dst_dir="$3"
+dst_dir="$3"/
 script="$4"
 
 files=$(find "$src_dir" -maxdepth 1 -type f -iname "*.$src_ext" | sort -n)
