@@ -1,6 +1,6 @@
 #!/bin/sh
 # (copyleft) Efenstor 2015-2024
-# Revision 2024-02-10
+# Revision 2024-02-21
 
 # Examples:
 # ffmpeg_options_v="-c:v libx264 -crf 16 -preset fast -tune film"
@@ -26,7 +26,7 @@ YELLOW="\033[1;33m"
 NC="\033[0m"
 
 # Parse the named parameters
-optstr="?he:d:a:pnlf"
+optstr="?he:d:a:pxnlf"
 audio_track=0
 audio_delay=0
 while getopts $optstr opt; do
@@ -42,6 +42,9 @@ while getopts $optstr opt; do
        ;;
     p) mpv=true
        echo "Preview instead of encoding"
+       ;;
+    x) pause=true
+       echo "Start preview in the paused state"
        ;;
     n) no_audio=true
        echo "Without audio"
@@ -72,6 +75,7 @@ Options:
   -e dst_ext   destination file extension, defines container format; if it is
                specified then <dst> will always be treated as a directory name
   -p           preview the output using mpv instead of doing conversion
+  -x           start preview in the paused state
   -n           do not process audio
   -d ms        audio delay in milliseconds
   -l           get audio delay from source file (-d delay will be added to it)
@@ -230,13 +234,13 @@ else
       ${end_frame:+-e $end_frame} - | \
       mpv --audio-file="$audio" \
       	--audio-delay=$(awk "BEGIN {print -($audio_start_time)}") \
-      	--fs -
+      	${pause:+--pause} --fs -
   else
     # Without audio
     env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
       -c y4m "$script" -p -r $threads -s $start_frame \
       ${end_frame:+-e $end_frame} - | \
-      mpv --fs -
+      mpv ${pause:+--pause} --fs -
   fi
   # Cancelled
   if [ $? -ne 0 ]; then export file_proc_vs_exit=1; exit 1; fi
