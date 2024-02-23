@@ -419,16 +419,17 @@ def decanon(clip, ml=40, quant=40, skip_decomb=False):
 
 	return clip
 
+
 #---------
 # Deblock
 #---------
 # Requirements: DeblockPP7
 
-def deblock(clip, blksize=8, qp=8.0, ml=16.0, mode=0):
+def deblock(clip, blksize=8, qp=8.0, ml=16.0):
 
 	overlap = int(blksize/2)
 
-	deblock = core.pp7.DeblockPP7(clip, qp=qp, mode=mode)
+	deblock = core.pp7.DeblockPP7(clip=clip, qp=qp)
 	sup = core.mv.Super(clip)
 	mvfw = core.mv.Analyse(sup, isb=False, blksize=blksize, overlap=overlap)
 	mask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=ml, gamma=1.0)
@@ -646,9 +647,9 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 # edges_rotate: process edges at 90 deg; can be useful for certain scenarios,
 #   e.g. to reduce horizontal jitter or dot crawl
 # edges_showmask: display the edge mask (use for tweaking)
-# mov_proc - enable processing of motion areas
+# mov_proc - enable additional processing of motion areas
 # mov_method - filtering method for motion areas:
-#    0: None, only deblocking if mov_deblock_qp>0
+#    0: None
 #    1: TBilateral (good)
 #    2: BoxBlur (fast)
 #    3: FlowBlur (weird)
@@ -676,14 +677,16 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 # mov_th: mask threshold for motion areas
 # mov_softness: softness of mask for motion areas
 # mov_amount: transparency for motion areas (0..1)
+# mov_thscd1, mov_thscd2: scene change detection thresholds
 # mov_antialias: additional light blur for motion areas (0..1, useful for
-#   mov_method=1)
-# mov_deblock_qp: motion areas deblock quantizer (1..63, 0=disabled)
-# mov_deblock_mode: motion areas deblock mode (0=hard, 1=soft, 2=medium)
+#   mov_method=1, performed even if mov_method=0)
+# mov_deblock_enable: pre-deblock motion areas (performed even if mov_method=0)
+# mov_deblock_qp: deblock quantizer (1..63)
+# mov_deblock_mode: deblock mode (0=hard, 1=soft, 2=medium)
 # mov_showmask: show the detected motion areas (use for tweaking)
 #----------
-# Filters out noise using different approaches for static areas, for edges and
-# for areas with strong motion
+# Filters out noise using different approaches for static areas and edges, with
+# optional additional filtering for motion areas
 
 # Requirements: MVTools or MVTools-Float, TBilateral, neo_fft3d, DeblockPP7
 
@@ -692,8 +695,9 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 			edges_threshold=63, edges_width=3, edges_softness=3,
 			edges_rotate=False, edges_showmask=False, mov_proc=False,
 			mov_method=4, mov_params=[2, 2, 2.0, 0, 64, 0, 0], mov_ml=20.0,
-			mov_th=100, mov_softness=5, mov_amount=0.7, mov_antialias=0,
-			mov_deblock_qp=0, mov_deblock_mode=0, mov_showmask=False):
+			mov_th=100, mov_softness=5, mov_amount=0.7, mov_thscd1=500,
+			mov_thscd2=200, mov_antialias=0, mov_deblock_enable=False,
+			mov_deblock_qp=8.0, mov_deblock_mode=0, mov_showmask=False):
 
 	# prepare some vars
 	if thsad==0: plane = 3
@@ -795,25 +799,25 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 	else:
 		clip = normal
 
-	if mov_proc==True:
-		if mov_method>0:
-			# analyse
-			olX = int(blksizeX/overlap)
-			olY = int(blksizeY/overlap)
-			sup = core.mv.Super(clip)
-			mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=olX,
-					overlapv=olY, blksize=blksizeX, blksizev=blksizeY)
+	# process motion areas
+	if mov_proc==True or mov_deblock_enable==True or mov_antialias>0:
+		# analyse
+		olX = int(blksizeX/overlap)
+		olY = int(blksizeY/overlap)
+		sup = core.mv.Super(clip)
+		mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=olX,
+				overlapv=olY, blksize=blksizeX, blksizev=blksizeY)
 
-			# create motion mask
-			movmask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=mov_ml,
-				gamma=1.0)
-			movmask = core.std.BinarizeMask(movmask, threshold=mov_th)
-			movmask = core.std.BoxBlur(movmask, hradius=mov_softness, hpasses=2,
-					vradius=mov_softness, vpasses=2)
-			if mov_showmask==True: return movmask
+		# create motion mask
+		movmask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=mov_ml,
+			gamma=1.0, thscd1=mov_thscd1, thscd2=mov_thscd2, ysc=255)
+		movmask = core.std.BinarizeMask(movmask, threshold=mov_th)
+		movmask = core.std.BoxBlur(movmask, hradius=mov_softness, hpasses=2,
+				vradius=mov_softness, vpasses=2)
+		if mov_showmask==True: return movmask
 
 		# deblock before processing
-		if mov_deblock_qp>0:
+		if mov_deblock_enable==True:
 			pre = core.pp7.DeblockPP7(clip, qp=mov_deblock_qp,
 				mode=mov_deblock_mode)
 		else:
@@ -994,7 +998,7 @@ def asharpen(clip, t=1.0, d=0.0, b=-1.0, hqbf=False, edges_thr=127,
 	# sharpen
 	sharp = core.asharp.ASharp(clip, t, d, b, hqbf)
 
-	# merge excluding contrast edges
+	# exclude contrast edges
 	clip = core.std.MaskedMerge(sharp, clip, edgemask)
 
 	return clip
