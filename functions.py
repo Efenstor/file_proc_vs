@@ -672,6 +672,8 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 #     [4]: block size (bw and bh)
 #     [5]: sharpen (>0, 0=disabled)
 #     [6]: dehalo (>0, 0=disabled)
+# mov_blksize: block size for motion estimation
+# mov_overlap: block overlap for motion estimation (block size div factor)
 # mov_ml: vector length for motion estimation for motion areas (>0)
 # mov_th: mask threshold for motion areas
 # mov_softness: softness of mask for motion areas
@@ -694,10 +696,11 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 			thsadc=300, edges_proc=True, edges_params=[0, 0, 1000, 1000],
 			edges_threshold=63, edges_width=3, edges_softness=3,
 			edges_rotate=False, edges_showmask=False, mov_proc=False,
-			mov_method=4, mov_params=[2, 2, 2.0, 0, 64, 0, 0], mov_ml=20.0,
-			mov_th=100, mov_softness=5, mov_amount=0.7, mov_thscd1=500,
-			mov_thscd2=200, mov_antialias=0, mov_deblock_enable=False,
-			mov_deblock_qp=8.0, mov_deblock_mode=0, mov_showmask=False):
+			mov_method=4, mov_params=[2, 2, 2.0, 0, 64, 0, 0], mov_blksize=16,
+			mov_overlap=2, mov_ml=20.0, mov_th=127, mov_softness=5,
+			mov_amount=1.0, mov_thscd1=500, mov_thscd2=200, mov_antialias=0,
+			mov_deblock_enable=False, mov_deblock_qp=8.0, mov_deblock_mode=0,
+			mov_showmask=False):
 
 	# prepare some vars
 	if thsad==0: plane = 3
@@ -802,18 +805,18 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 	# process motion areas
 	if mov_proc==True or mov_deblock_enable==True or mov_antialias>0:
 		# analyse
-		olX = int(blksizeX/overlap)
-		olY = int(blksizeY/overlap)
+		ol = int(mov_blksize/mov_overlap)
 		sup = core.mv.Super(clip)
-		mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=olX,
-				overlapv=olY, blksize=blksizeX, blksizev=blksizeY)
+		mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=ol,
+				blksize=mov_blksize)
 
 		# create motion mask
 		movmask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=mov_ml,
 			gamma=1.0, thscd1=mov_thscd1, thscd2=mov_thscd2, ysc=255)
 		movmask = core.std.BinarizeMask(movmask, threshold=mov_th)
-		movmask = core.std.BoxBlur(movmask, hradius=mov_softness, hpasses=2,
-				vradius=mov_softness, vpasses=2)
+		if mov_softness>0:
+			movmask = core.std.BoxBlur(movmask, hradius=mov_softness, hpasses=2,
+					vradius=mov_softness, vpasses=2)
 		if mov_showmask==True: return movmask
 
 		# deblock before processing
