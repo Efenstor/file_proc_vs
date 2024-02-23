@@ -649,7 +649,6 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 # edges_showmask: display the edge mask (use for tweaking)
 # mov_proc - enable additional processing of motion areas
 # mov_method - filtering method for motion areas:
-#    0: None
 #    1: TBilateral (good)
 #    2: BoxBlur (fast)
 #    3: FlowBlur (weird)
@@ -679,8 +678,9 @@ def denoise2(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=300, thsadc=300,
 # mov_amount: transparency for motion areas (0..1)
 # mov_thscd1, mov_thscd2: scene change detection thresholds
 # mov_antialias: additional light blur for motion areas (0..1, useful for
-#   mov_method=1, performed even if mov_method=0)
-# mov_deblock_enable: pre-deblock motion areas (performed even if mov_method=0)
+#   mov_method=1, performed even if mov_proc=False)
+# mov_deblock_enable: pre-deblock motion areas (performed even if
+#   mov_proc=False)
 # mov_deblock_qp: deblock quantizer (1..63)
 # mov_deblock_mode: deblock mode (0=hard, 1=soft, 2=medium)
 # mov_showmask: show the detected motion areas (use for tweaking)
@@ -824,48 +824,52 @@ def denoise3(clip, blksizeX=32, blksizeY=32, recalc=3, overlap=2, thsad=300,
 			pre = clip
 
 		# denoise areas with motion
-		if mov_method==1:
-			# TBilateral
-			if mov_params[0]>0:
-				mov = core.tbilateral.TBilateral(pre, planes=[0],
-					diameter=mov_params[0], sdev=mov_params[2],
-					idev=mov_params[4])
-			if mov_params[1]>0:
-				mov = core.tbilateral.TBilateral(mov, planes=[1,2],
-					diameter=mov_params[1], sdev=mov_params[3],
-					idev=mov_params[5])
-		elif mov_method==2:
-			# BoxBlur
-			radius = int(mov_params[0]/2)
-			radiusc = int(mov_params[1]/2)
-			if radius>0:
-				mov = core.std.BoxBlur(pre, planes=[0], hradius=radius,
-					vradius=radius)
-			if radiusc>0:
-				mov = core.std.BoxBlur(mov, planes=[1,2], hradius=radiusc,
-					vradius=radiusc)
-		elif mov_method==3:
-			# FlowBlur
-			olFB = int(mov_params[0]/mov_params[1])
-			mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=olFB,
-				blksize=mov_params[0])
-			mvbw = core.mv.Analyse(sup, isb=True, delta=1, overlap=olFB,
-				blksize=mov_params[0])
-			mov = core.mv.FlowBlur(pre, sup, mvbw, mvfw, blur=mov_params[2])
-		elif mov_method==4:
-			# neo_fft3d
-			if mov_params[0]>-2:
-				mov = core.neo_fft3d.FFT3D(pre, planes=[0], bt=mov_params[0],
-					sigma=mov_params[2], bw=mov_params[4], bh=mov_params[4],
-					ow=mov_params[4]/2, oh=mov_params[4]/2,
-					sharpen=mov_params[5], dehalo=mov_params[6])
-			if mov_params[1]>-2:
-				mov = core.neo_fft3d.FFT3D(pre, planes=[1,2], bt=mov_params[1],
-					sigma=mov_params[3], bw=mov_params[4], bh=mov_params[4],
-					ow=mov_params[4]/2, oh=mov_params[4]/2,
-					sharpen=mov_params[5], dehalo=mov_params[6])
+		if mov_proc==True:
+			if mov_method==1:
+				# TBilateral
+				if mov_params[0]>0:
+					mov = core.tbilateral.TBilateral(pre, planes=[0],
+						diameter=mov_params[0], sdev=mov_params[2],
+						idev=mov_params[4])
+				if mov_params[1]>0:
+					mov = core.tbilateral.TBilateral(mov, planes=[1,2],
+						diameter=mov_params[1], sdev=mov_params[3],
+						idev=mov_params[5])
+			elif mov_method==2:
+				# BoxBlur
+				radius = int(mov_params[0]/2)
+				radiusc = int(mov_params[1]/2)
+				if radius>0:
+					mov = core.std.BoxBlur(pre, planes=[0], hradius=radius,
+						vradius=radius)
+				if radiusc>0:
+					mov = core.std.BoxBlur(mov, planes=[1,2], hradius=radiusc,
+						vradius=radiusc)
+			elif mov_method==3:
+				# FlowBlur
+				olFB = int(mov_params[0]/mov_params[1])
+				mvfw = core.mv.Analyse(sup, isb=False, delta=1, overlap=olFB,
+					blksize=mov_params[0])
+				mvbw = core.mv.Analyse(sup, isb=True, delta=1, overlap=olFB,
+					blksize=mov_params[0])
+				mov = core.mv.FlowBlur(pre, sup, mvbw, mvfw, blur=mov_params[2])
+			elif mov_method==4:
+				# neo_fft3d
+				if mov_params[0]>-2:
+					mov = core.neo_fft3d.FFT3D(pre, planes=[0], bt=mov_params[0],
+						sigma=mov_params[2], bw=mov_params[4], bh=mov_params[4],
+						ow=mov_params[4]/2, oh=mov_params[4]/2,
+						sharpen=mov_params[5], dehalo=mov_params[6])
+				if mov_params[1]>-2:
+					mov = core.neo_fft3d.FFT3D(pre, planes=[1,2], bt=mov_params[1],
+						sigma=mov_params[3], bw=mov_params[4], bh=mov_params[4],
+						ow=mov_params[4]/2, oh=mov_params[4]/2,
+						sharpen=mov_params[5], dehalo=mov_params[6])
+			else:
+				# no denoise, pre-processing only
+				mov = pre
 		else:
-			# none, only deblocking
+			# no denoise, pre-processing only
 			mov = pre
 
 		# additional anti-alias
