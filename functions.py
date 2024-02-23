@@ -425,11 +425,11 @@ def decanon(clip, ml=40, quant=40, skip_decomb=False):
 #---------
 # Requirements: DeblockPP7
 
-def deblock(clip, blksize=8, qp=8.0, ml=16.0):
+def deblock(clip, blksize=8, qp=8.0, ml=16.0, mode=0):
 
 	overlap = int(blksize/2)
 
-	deblock = core.pp7.DeblockPP7(clip=clip, qp=qp)
+	deblock = core.pp7.DeblockPP7(clip, qp=qp, mode=mode)
 	sup = core.mv.Super(clip)
 	mvfw = core.mv.Analyse(sup, isb=False, blksize=blksize, overlap=overlap)
 	mask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=ml, gamma=1.0)
