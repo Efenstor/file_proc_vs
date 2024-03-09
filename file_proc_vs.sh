@@ -15,6 +15,7 @@ ffmpeg_options_v="-c:v libx264 -crf 20 -tune film"
 ffmpeg_options_a="-c:a aac -b:a 256k"
 dst_ext_default="mkv"
 threads=8
+thread_queue_size=64
 vspath=/usr/local/lib/python3.11/site-packages
 
 # Internal defines
@@ -209,13 +210,15 @@ if [ ! $mpv ]; then
   if [ ! $no_audio ]; then
     env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
       -c y4m "$script" -p -r $threads -s $start_frame \
-      ${end_frame:+-e $end_frame} - | ffmpeg -i pipe: \
+      ${end_frame:+-e $end_frame} - | \
+      ffmpeg -thread_queue_size $thread_queue_size -i pipe: \
       -ss $audio_start_time -i "$audio" -map 0:v:0 -map 1:a:0 \
       $ffmpeg_options_v $ffmpeg_options_a "$dst"
   else
     env ${vspath:+PYTHONPATH="$vspath":}"$PWD" vspipe -a filename="$src_file" \
       -c y4m "$script" -p -r $threads -s $start_frame \
-      ${end_frame:+-e $end_frame} - | ffmpeg -i pipe: \
+      ${end_frame:+-e $end_frame} - | \
+      ffmpeg -thread_queue_size $thread_queue_size -i pipe: \
       $ffmpeg_options_v -c:a none "$dst"
   fi
   # Cancelled
