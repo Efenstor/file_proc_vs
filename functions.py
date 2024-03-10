@@ -49,10 +49,13 @@ def ivtc(clip):
 #---------
 # Denoise
 #---------
+# recalc: number of recalculations (>0; e.g. for blksize=32 and recalc=3 block
+#         sizes will be 32,16,8,4 (the last three are the recalculations); for
+#         blksize=64 and recalc=1 those will be 32 and 16; etc.)
 # Requirements: MVTools or MVTools-Float
 
 def denoise(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=200, thsadc=400,
-		ext_super=None):
+		ext_super=None, recalc=0):
 
 	if blksizeX>2: overlapX = int(blksizeX/overlap)
 	else: overlapX=0
@@ -77,6 +80,28 @@ def denoise(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=200, thsadc=400,
 	mvfw3 = core.mv.Analyse(sup, isb=False, delta=3, overlap=overlapX,
 			overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
 
+	# do recalculations
+	for r in range(0, recalc):
+		blksizeX = blksizeX>>1
+		if blksizeX<4: break
+		blksizeY = blksizeY>>1
+		if blksizeY<4: break
+		overlapX = int(blksizeX/overlap)
+		overlapY = int(blksizeY/overlap)
+		mvbw1 = core.mv.Recalculate(sup, mvbw1, overlap=overlapX,
+				overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+		mvfw1 = core.mv.Recalculate(sup, mvfw1, overlap=overlapX,
+				overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+		mvbw2 = core.mv.Recalculate(sup, mvbw2, overlap=overlapX,
+				overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+		mvfw2 = core.mv.Recalculate(sup, mvfw2, overlap=overlapX,
+				overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+		mvbw3 = core.mv.Recalculate(sup, mvbw3, overlap=overlapX,
+				overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+		mvfw3 = core.mv.Recalculate(sup, mvfw3, overlap=overlapX,
+				overlapv=overlapY, blksize=blksizeX, blksizev=blksizeY)
+
+	# which planes are to process
 	if thsad==0:
 		plane = 3
 	elif thsadc==0:
@@ -84,6 +109,7 @@ def denoise(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=200, thsadc=400,
 	else:
 		plane = 4
 
+	# process
 	clip = core.mv.Degrain3(clip, sup, mvbw1, mvfw1, mvbw2, mvfw2, mvbw3, mvfw3,
 			thsad=thsad, thsadc=thsadc, plane=plane)
 
@@ -422,17 +448,55 @@ def decanon(clip, ml=40, quant=40, skip_decomb=False):
 
 #---------
 # Deblock
+# method: motion masking method
+#   0 = MVTools Mask
+#   1 = MotionMask
+#   2 = DCT difference
+# blksize, ml, thscd1, thscd2: parameters for method 0
+# th1, th2, width, softness: parameters for methods >0
+# tht: only for method 1
 #---------
-# Requirements: DeblockPP7
+# Requirements: DeblockPP7, MVTools or MVTools-Float, MotionMask
 
-def deblock(clip, blksize=8, qp=8.0, ml=16.0, mode=0):
+def deblock(clip, qp=8.0, mode=0, method=0, blksize=8, ml=16.0,
+		thscd1=500, thscd2=200, th1=63, th2=127, tht=127, width=4, softness=4,
+		show_mask=False):
 
-	overlap = int(blksize/2)
-
+	# Deblock
 	deblock = core.pp7.DeblockPP7(clip, qp=qp, mode=mode)
-	sup = core.mv.Super(clip)
-	mvfw = core.mv.Analyse(sup, isb=False, blksize=blksize, overlap=overlap)
-	mask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=ml, gamma=1.0)
+
+	# Create mask
+	if method==0:
+		# MVTools Mask
+		overlap = int(blksize/2)
+		sup = core.mv.Super(clip)
+		mvfw = core.mv.Analyse(sup, isb=False, blksize=blksize, overlap=overlap)
+		mask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=ml, gamma=1.0,
+				thscd1=thscd1, thscd2=thscd2, scy=255)
+	elif method==1:
+		# MotionMask
+		mask = core.motionmask.MotionMask(clip=clip, th1=[th1,th1,th1],
+				th2=[th2,th2,th2], tht=tht, sc_value=255)
+	elif method==2:
+		# DCT difference
+		dct = core.dctf.DCTFilter(clip=clip, factors=[1,1,0,0,0,0,0,0], planes=[0])
+		mask = core.std.MakeDiff(clipa=clip, clipb=dct, planes=[0])
+		mask = core.std.Levels(mask, min_in=th1, max_in=th2, min_out=0,
+				max_out=255, planes=[0])
+
+	# Process mask
+	if method>0:
+		for i in range(0, width):
+			mask = core.std.Maximum(mask)
+		if softness>0:
+			mask = core.std.BoxBlur(mask, hradius=softness, hpasses=2,
+					vradius=softness, vpasses=2)
+
+	# Show mask
+	if show_mask==True:
+		return mask
+
+	# Merge
 	clip = core.std.MaskedMerge(clip, deblock, mask)
 	return clip
 
