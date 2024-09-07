@@ -1,6 +1,6 @@
 #!/bin/sh
 # (copyleft) Efenstor 2015-2024
-# Revision 2024-02-21
+# Revision 2024-09-08
 
 # Examples:
 # ffmpeg_options_v="-c:v libx264 -crf 16 -preset fast -tune film"
@@ -11,7 +11,7 @@
 # ffmpeg_options_a="-c:a ogg -q:a 3.0"
 
 # User defines
-ffmpeg_options_v="-c:v libx264 -crf 20 -tune film"
+ffmpeg_options_v="-c:v libx264 -crf 18 -tune film"
 ffmpeg_options_a="-c:a aac -b:a 256k"
 dst_ext_default="mkv"
 threads=8
@@ -190,7 +190,7 @@ if [ ! $start_frame ]; then
     # Fast calculation
     fps=$(ffprobe -show_entries stream -select_streams v:0 -i "$src_file" 2>&1 | \
       sed -n "s/avg_frame_rate=//p")
-    start_frame=$(awk "BEGIN {print ($video_start_time)*($fps)}")
+    start_frame=$(awk "BEGIN {print int(($video_start_time)*($fps))}")
   fi
 fi
 echo "Start frame: $start_frame"
