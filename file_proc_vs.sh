@@ -1,6 +1,6 @@
 #!/bin/sh
 # (copyleft) Efenstor 2015-2024
-# Revision 2024-09-08
+# Revision 2024-12-30
 
 # Examples:
 # ffmpeg_options_v="-c:v libx264 -crf 16 -preset fast -tune film"
@@ -15,7 +15,7 @@ ffmpeg_options_v="-c:v libx264 -crf 18 -tune film"
 ffmpeg_options_a="-c:a aac -b:a 256k"
 dst_ext_default="mkv"
 threads=8
-thread_queue_size=64
+thread_queue_size=256
 vspath=/usr/local/lib/python3.11/site-packages
 
 # Internal defines

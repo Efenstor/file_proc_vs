@@ -1,5 +1,5 @@
 # FUNCTIONS.PY by Efenstor
-# Modified in February 2024
+# Modified in December 2024
 
 import vapoursynth as vs
 from vapoursynth import core
@@ -219,6 +219,114 @@ def neuralupscale(clip, method=0, model=1, noise=-1):
 	clip = core.resize.Bicubic(clip, format=orig_format, matrix_s="709")
 	return clip
 
+
+#----------
+# RIFE
+# keepfps=True with factornum=2 produces the x2 slowmo effect
+# model:
+#  0 = rife
+#  1 = rife-HD
+#  2 = rife-UHD
+#  3 = rife-anime
+#  4 = rife-v2
+#  5 = rife-v2.3
+#  6 = rife-v2.4
+#  7 = rife-v3.0
+#  8 = rife-v3.1
+#  9 = rife-v3.9 (ensemble=False / fast=True)
+#  10 = rife-v3.9 (ensemble=True / fast=False)
+#  11 = rife-v4 (ensemble=False / fast=True)
+#  12 = rife-v4 (ensemble=True / fast=False)
+#  13 = [rife-v4.1](https://github.com/mirrorsysu/rife-ncnn-vulkan/tree/model_4_1) (ensemble=False / fast=True)
+#  14 = rife-v4.1 (ensemble=True / fast=False)
+#  15 = rife-v4.2 (ensemble=False / fast=True)
+#  16 = rife-v4.2 (ensemble=True / fast=False)
+#  17 = rife-v4.3 (ensemble=False / fast=True)
+#  18 = rife-v4.3 (ensemble=True / fast=False)
+#  19 = rife-v4.4 (ensemble=False / fast=True)
+#  20 = rife-v4.4 (ensemble=True / fast=False)
+#  21 = rife-v4.5 (ensemble=False)
+#  22 = rife-v4.5 (ensemble=True)
+#  23 = rife-v4.6 (ensemble=False)
+#  24 = rife-v4.6 (ensemble=True)
+#  25 = rife-v4.7 (ensemble=False)
+#  26 = rife-v4.7 (ensemble=True)
+#  27 = rife-v4.8 (ensemble=False)
+#  28 = rife-v4.8 (ensemble=True)
+#  29 = rife-v4.9 (ensemble=False)
+#  30 = rife-v4.9 (ensemble=True)
+#  31 = rife-v4.10 (ensemble=False)
+#  32 = rife-v4.10 (ensemble=True)
+#  33 = rife-v4.11 (ensemble=False)
+#  34 = rife-v4.11 (ensemble=True)
+#  35 = rife-v4.12 (ensemble=False)
+#  36 = rife-v4.12 (ensemble=True)
+#  37 = rife-v4.12-lite (ensemble=False)
+#  38 = rife-v4.12-lite (ensemble=True)
+#  39 = rife-v4.13 (ensemble=False)
+#  40 = rife-v4.13 (ensemble=True)
+#  41 = rife-v4.13-lite (ensemble=False)
+#  42 = rife-v4.13-lite (ensemble=True)
+#  43 = rife-v4.14 (ensemble=False)
+#  44 = rife-v4.14 (ensemble=True)
+#  45 = rife-v4.14-lite (ensemble=False)
+#  46 = rife-v4.14-lite (ensemble=True)
+#  47 = rife-v4.15 (ensemble=False)
+#  48 = rife-v4.15 (ensemble=True)
+#  49 = rife-v4.15-lite (ensemble=False)
+#  50 = rife-v4.15-lite (ensemble=True)
+#  51 = rife-v4.16-lite (ensemble=False)
+#  52 = rife-v4.16-lite (ensemble=True)
+#  53 = rife-v4.17 (ensemble=False)
+#  54 = rife-v4.17 (ensemble=True)
+#  55 = rife-v4.17-lite (ensemble=False)
+#  56 = rife-v4.17-lite (ensemble=True)
+#  57 = rife-v4.18 (ensemble=False)
+#  58 = rife-v4.18 (ensemble=True)
+#  59 = rife-v4.19-beta (ensemble=False)
+#  60 = rife-v4.19-beta (ensemble=True)
+#  61 = rife-v4.20 (ensemble=False)
+#  62 = rife-v4.20 (ensemble=True)
+#  63 = rife-v4.21 (ensemble=False)
+#  64 = rife-v4.22 (ensemble=False)
+#  65 = rife-v4.22-lite (ensemble=False)
+#  66 = rife-v4.23-beta (ensemble=False)
+#  67 = rife-v4.24 (ensemble=False)
+#  68 = rife-v4.24 (ensemble=True)
+#  69 = rife-v4.25 (ensemble=False)
+#  70 = rife-v4.25-lite (ensemble=False)
+#  71 = rife-v4.25-heavy (ensemble=False)
+#  72 = rife-v4.26 (ensemble=False)
+#  73 = rife-v4.26-large (ensemble=False)
+# sudo's experimental custom models (only works with 2x)
+#  74 = sudo_rife4 (ensemble=False / fast=True)
+#  75 = sudo_rife4 (ensemble=True / fast=False)
+#  76 = sudo_rife4 (ensemble=True / fast=True)
+#----------
+# Requirements: RIFE
+
+def rife(clip, model=73, factornum=2, factorden=1, fpsnum=60000, fpsden=1001,
+		usefactor=True, keepfps=False, uhd=False):
+
+	src_fpsnum = clip.fps_num
+	src_fpsden = clip.fps_den
+	orig_fmt = clip.format
+	if orig_fmt!=vs.RGBS:
+			clip = core.resize.Bicubic(clip, format=vs.RGBS, matrix_in_s="709")
+	if usefactor==True:
+		clip = core.rife.RIFE(clip, model=model, factor_num=factornum,
+				factor_den=factorden, uhd=uhd)
+	else:
+	  clip = core.rife.RIFE(clip, model=model, fps_num=fpsnum, fps_den=fpsden,
+	  		uhd=uhd)
+	if orig_fmt!=vs.RGBS:
+			clip = core.resize.Bicubic(clip, format=orig_fmt, matrix_s="709")
+	if keepfps==True:
+			clip = core.std.AssumeFPS(clip=clip, fpsnum=src_fpsnum, fpsden=src_fpsden)
+
+	return clip
+
+
 #-----------------
 # FixFieldJitter
 #-----------------
@@ -371,15 +479,17 @@ def speedup(clip, transition):
 #--------
 # Requirements: none
 
-def strobe(clip, transition):
+def strobe(clip, every=4, transition=0):
 
 	src_fpsnum = clip.fps_num
 	src_fpsden = clip.fps_den
 
-	frameA = core.std.SelectEvery(clip, 4, 0)
-	frameB = core.std.SelectEvery(clip, 4, 1)
-	clip = core.std.Merge(frameA, frameB, transition)
-	clip = core.std.Interleave(clips=[clip,clip,clip,clip])
+	frameA = core.std.SelectEvery(clip, every, 0)
+	if transition>0:
+		frameB = core.std.SelectEvery(clip, every, 1)
+		clip = core.std.Merge(frameA, frameB, transition)
+	else: clip = frameA
+	clip = core.std.Interleave(clips=[clip for _ in range(every)])
 	clip = core.std.AssumeFPS(clip=clip, fpsnum=src_fpsnum, fpsden=src_fpsden)
 
 	return clip

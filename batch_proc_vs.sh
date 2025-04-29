@@ -1,6 +1,6 @@
 #!/bin/sh
-# (copyleft) Efenstor 2015-2023
-# Revision 2023-10-27
+# (copyleft) Efenstor 2015-2025
+# Revision 2025-04-30
 
 file_proc_script="file_proc_vs.sh"
 
@@ -65,14 +65,18 @@ src_ext="$2"
 dst_dir="$3"/
 script="$4"
 
-files=$(find "$src_dir" -maxdepth 1 -type f -iname "*.$src_ext" | sort -n)
-IFS=$'\n'
-for i in $files; do
+echo
+
+files=$(find "$src_dir" -maxdepth 1 -type f -iname "*.$src_ext" | sort -n -f)
+while [ -n "$files" ]
+do
+  i=$(echo "$files" | head -n 1)
+  files=$(echo "$files" | tail -n +2)
   # Process
   if [ $file_proc_params ]; then
-    "$SDIR/$file_proc_script" "$file_proc_params" "$i" "$dst_dir" "$script"
+    "$SDIR"/"$file_proc_script" "$file_proc_params" "$i" "$dst_dir" "$script"
   else
-    "$SDIR/$file_proc_script" "$i" "$dst_dir" "$script"
+    "$SDIR"/"$file_proc_script" "$i" "$dst_dir" "$script"
   fi
   # Cancelled
   if [ $file_proc_vs_exit ]; then exit $?; fi
