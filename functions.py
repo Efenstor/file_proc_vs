@@ -1,5 +1,5 @@
 # FUNCTIONS.PY by Efenstor
-# Modified in December 2024
+# Modified in July 2025
 
 import vapoursynth as vs
 from vapoursynth import core
@@ -116,12 +116,12 @@ def denoise(clip, blksizeX=8, blksizeY=8, overlap=2, thsad=200, thsadc=400,
 	return clip
 
 
-#------------
+#---------
 # FlowFPS
-#------------
+#---------
 # Requirements: MVTools or MVTools-Float
 
-def flowfps(clip, num, den, blksize, keepfps):
+def flowfps(clip, num=60000, den=1001, blksize=8, keepfps=False):
 
 	src_fpsnum = clip.fps_num
 	src_fpsden = clip.fps_den
@@ -141,12 +141,56 @@ def flowfps(clip, num, den, blksize, keepfps):
 	return clip
 
 
+#----------
+# FlowFPS2
+#----------
+# Requirements: MVTools or MVTools-Float
+
+def flowfps2(clip, num=60000, den=1001, blksizeX=32, blksizeY=32, recalc=3, overlap=2, keepfps=False):
+
+	src_fpsnum = clip.fps_num
+	src_fpsden = clip.fps_den
+
+	# analyze
+	bsX = blksizeX
+	bsY = blksizeY
+	if bsX>2: olX = int(bsX/overlap)
+	else: olX = 0
+	if bsY>2: olY = int(bsY/overlap)
+	else: olY = 0
+	sup = core.mv.Super(clip)
+	mvbw1 = core.mv.Analyse(sup, isb=True, delta=1, overlap=olX,
+			overlapv=olY, blksize=bsX, blksizev=bsY)
+	mvfw1 = core.mv.Analyse(sup, isb=False, delta=1, overlap=olX,
+			overlapv=olY, blksize=bsX, blksizev=bsY)
+	# do recalculations
+	for r in range(0, recalc):
+		bsX = bsX>>1
+		if bsX<4: break
+		bsY = bsY>>1
+		if bsY<4: break
+		olX = int(bsX/overlap)
+		olY = int(bsY/overlap)
+		mvbw1 = core.mv.Recalculate(sup, mvbw1, overlap=olX, overlapv=olY,
+				blksize=bsX, blksizev=bsY)
+		mvfw1 = core.mv.Recalculate(sup, mvfw1, overlap=olX, overlapv=olY,
+				blksize=bsX, blksizev=bsY)
+
+	# process
+	clip = core.mv.FlowFPS(clip, sup, mvbw1, mvfw1, num=num, den=den)
+
+	if keepfps:
+		clip = core.std.AssumeFPS(clip, fpsnum=src_fpsnum, fpsden=src_fpsden)
+
+	return clip
+
+
 #---------
 # AddBlur
 #---------
 # Requirements: MVTools or MVTools-Float
 
-def addblur(clip, amount, blksize):
+def addblur2(clip, amount, blksize):
 
 	overlap = int(blksize/2)
 
@@ -159,6 +203,45 @@ def addblur(clip, amount, blksize):
 	clip = core.mv.FlowBlur(clip, sup, mvbw1, mvfw1, blur=amount)
 
 	return clip
+
+
+#----------
+# AddBlur2
+#----------
+# Requirements: MVTools or MVTools-Float
+
+def addblur2(clip, amount=50, blksizeX=32, blksizeY=32, recalc=3, overlap=2):
+
+	# analyze
+	bsX = blksizeX
+	bsY = blksizeY
+	if bsX>2: olX = int(bsX/overlap)
+	else: olX = 0
+	if bsY>2: olY = int(bsY/overlap)
+	else: olY = 0
+	sup = core.mv.Super(clip)
+	mvbw1 = core.mv.Analyse(sup, isb=True, delta=1, overlap=olX,
+			overlapv=olY, blksize=bsX, blksizev=bsY)
+	mvfw1 = core.mv.Analyse(sup, isb=False, delta=1, overlap=olX,
+			overlapv=olY, blksize=bsX, blksizev=bsY)
+	# do recalculations
+	for r in range(0, recalc):
+		bsX = bsX>>1
+		if bsX<4: break
+		bsY = bsY>>1
+		if bsY<4: break
+		olX = int(bsX/overlap)
+		olY = int(bsY/overlap)
+		mvbw1 = core.mv.Recalculate(sup, mvbw1, overlap=olX, overlapv=olY,
+				blksize=bsX, blksizev=bsY)
+		mvfw1 = core.mv.Recalculate(sup, mvfw1, overlap=olX, overlapv=olY,
+				blksize=bsX, blksizev=bsY)
+
+	# process
+	clip = core.mv.FlowBlur(clip, sup, mvbw1, mvfw1, blur=amount)
+
+	return clip
+
 
 #-------------
 # SRMDSharpen
@@ -437,15 +520,13 @@ def slowdown(clip, transition):
 	src_fpsnum = clip.fps_num
 	src_fpsden = clip.fps_den
 
-	clip = core.std.Interleave(clips=[clip,clip])
 	frameA = clip
 	frameB = core.std.DeleteFrames(clip, 0)
 	if transition==0:
-		clip = frameA
-	elif transition==1:
-		clip = frameB
+		frameT = frameA
 	else:
-		clip = core.std.Merge(frameA, frameB, transition)
+		frameT = core.std.Merge(frameA, frameB, transition)
+	clip = core.std.Interleave(clips=[frameA,frameT])
 	clip = core.std.AssumeFPS(clip=clip, fpsnum=src_fpsnum, fpsden=src_fpsden)
 
 	return clip
@@ -582,7 +663,7 @@ def deblock(clip, qp=8.0, mode=0, method=0, blksize=8, ml=16.0,
 		sup = core.mv.Super(clip)
 		mvfw = core.mv.Analyse(sup, isb=False, blksize=blksize, overlap=overlap)
 		mask = core.mv.Mask(clip=clip, vectors=mvfw, kind=1, ml=ml, gamma=1.0,
-				thscd1=thscd1, thscd2=thscd2, scy=255)
+				thscd1=thscd1, thscd2=thscd2)
 	elif method==1:
 		# MotionMask
 		mask = core.motionmask.MotionMask(clip=clip, th1=[th1,th1,th1],

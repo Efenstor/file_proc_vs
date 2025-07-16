@@ -11,7 +11,7 @@
 # ffmpeg_options_a="-c:a ogg -q:a 3.0"
 
 # User defines
-ffmpeg_options_v="-c:v libx264 -crf 18 -tune film"
+ffmpeg_options_v="-c:v libx264 -crf 20"
 ffmpeg_options_a="-c:a aac -b:a 256k"
 dst_ext_default="mkv"
 threads=8
