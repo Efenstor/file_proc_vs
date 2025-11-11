@@ -1,6 +1,6 @@
 #!/bin/sh
-# (copyleft) Efenstor 2015-2024
-# Revision 2024-12-30
+# (copyleft) Efenstor 2015-2025
+# Revision 2025-11-11
 
 # Examples:
 # ffmpeg_options_v="-c:v libx264 -crf 16 -preset fast -tune film"
@@ -85,10 +85,9 @@ Options:
 Parameters:
   <src_file>    source file to process and encode or preview
   <dst>         file or directory where the output file is to be placed;
-                if <dst> has no extension then it is assumed than it is a
-                directory, if it does not exist it will be created; extracted
-                audio file is placed next to the output file; existing files are
-                overwritten silentily
+                if it's a directory and it does not exist it will be created;
+                extracted audio file is placed next to the output file; existing
+                files are overwritten silentily
   <proc.py>     VapourSynth script to be used for processing
   [start_time]  start time in seconds
   [start_frame] specify start frame directly to accelerate start (start_time
@@ -104,26 +103,24 @@ fi
 # Determine if dst is a file or a dir
 if [ ! "$dst_ext" ]; then
   # Extension not specified directly with an -e parameter
-  ext="${2##*.}"
-  if [ "$ext" = "$2" ]; then ext= ; fi
-  echo "ext: $ext"
+  bname=$(basename "$2")
+  ext="${bname##*.}"
+  if [ "$ext" = "$bname" ]; then ext= ; fi
   if [ $(echo "$2" | sed "s/.*\/$//g") ] && [ "$ext" ]; then
-    # dst not ending with a / and has some extension
+    # dst not ending with a / and has some extension, then it's a file
     dst="$2"
     dst_dir=$(dirname "$2")
     dst_ext="$ext"
   else
-    dst_ext=$dst_ext_default
-    echo "Destination extension: $dst_ext"
+    # dst is a dir
+    dst_dir=$(echo "$2" | sed "s/\/*$//g")  # trim any trailing slashes
+    dst_ext="$dst_ext_default"
   fi
 fi
+echo "Destination extension: $dst_ext"
 
 # Prepare some vars
 src_file="$1"
-if [ ! "$dst_dir" ]; then
-  echo "Destination dir: \"$dst\""
-  dst_dir="$2"
-fi
 script="$3"
 if [ "$4" ]; then
   video_start_time=$4
@@ -151,8 +148,8 @@ src=$(basename "$src_file")
 audio="$dst_dir/$src".wav
 if [ ! "$dst" ]; then
   dst="$dst_dir/${src%.*}.$dst_ext"
-  echo "Destination file: \"$dst\""
 fi
+echo "Destination file: \"$dst\""
 
 # Create the output directory
 if [ ! -e "$dst_dir" ] || [ ! -d "$dst_dir" ]; then
