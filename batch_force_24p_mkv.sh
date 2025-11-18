@@ -8,10 +8,12 @@ dst_ext="mkv"
 
 # Help
 if [ $# -lt 2 ]; then
-  echo "Batch-force video frame rate to 23.976 using mkvmerge"
-  echo "--"
+  echo
+  echo "Batch-force video frame rate to 23.976 using mkvmerge without re-encoding"
+  echo
   echo "Usage: batch_force_24p_mkv.sh <src_dir> <dst_dir> [src_ext]"
   echo "Note: existing files in dst_dir will be skipped, not overwritten"
+  echo
   exit
 fi
 
