@@ -1,5 +1,5 @@
 # FUNCTIONS.PY by Efenstor
-# Modified in July 2025
+# Modified in December 2025
 
 import vapoursynth as vs
 from vapoursynth import core
@@ -1264,4 +1264,48 @@ def asharpen(clip, t=1.0, d=0.0, b=-1.0, hqbf=False, edges_thr=127,
 	clip = core.std.MaskedMerge(sharp, clip, edgemask)
 
 	return clip
+
+#--------
+# MDeDup
+# offset: start the pattern with offset
+# intro: introductory pattern, it is useful if the duplication pattern is
+#        slightly broken at the beginning of the clip
+#--------
+# Manual frame deduplication
+# Requirements: none
+
+def mdedup(clip, pattern="+++-", offset=0, intro=""):
+
+  plen = len(pattern)
+
+  fnum = 0
+  delnum = 0
+
+  if len(intro)>0:
+    # Decimate the intro part
+    for i in range(len(intro)):
+      if intro[i]=="-":
+        clip = core.std.DeleteFrames(clip, [fnum-delnum])
+        delnum += 1
+      fnum += 1
+
+  if offset>0:
+    # Decimate the incomplete first cycle
+    for i in range(offset, plen):
+      if pattern[i]=="-":
+        clip = core.std.DeleteFrames(clip, [fnum-delnum])
+        delnum += 1
+      fnum += 1
+
+  # Continue with the full cycles
+  while fnum<clip.num_frames:
+    for i in range(plen):
+      if fnum>=clip.num_frames:
+        break
+      if pattern[i]=="-":
+        clip = core.std.DeleteFrames(clip, [fnum-delnum])
+        delnum += 1
+      fnum += 1
+
+  return clip
 
