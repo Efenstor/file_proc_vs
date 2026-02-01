@@ -106,7 +106,7 @@ if [ ! "$dst_ext" ]; then
   bname=$(basename "$2")
   ext="${bname##*.}"
   if [ "$ext" = "$bname" ]; then ext= ; fi
-  if [ $(echo "$2" | sed "s/.*\/$//g") ] && [ "$ext" ]; then
+  if ! echo "$2" | grep "\/$" > /dev/null && [ "$ext" ]; then
     # dst not ending with a / and has some extension, then it's a file
     dst="$2"
     dst_dir=$(dirname "$2")
